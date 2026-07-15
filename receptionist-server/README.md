@@ -2,19 +2,36 @@
 
 This is the actual server that answers real phone calls once wired up. It
 ports the pricing and scheduling logic from the chat demo into three tools
-Vapi's voice AI calls mid-conversation. You do the account setup yourself
-(I can't create accounts or enter payment details for you), but every piece
-of code is done.
+Vapi's voice AI calls mid-conversation, and writes real bookings straight
+into the same Supabase database the dashboard app reads — a job Alex books
+shows up on the owner's Jobs board and calendar without anyone re-entering
+it. You do the account setup yourself (I can't create accounts or enter
+payment details for you), but every piece of code is done.
 
 ## What each piece does
 
 - `server.js` — the webhook. Vapi hits this whenever the assistant needs a
   price, an available slot, or to book a job.
 - `lib/pricing.js` — the same pricing rules as the demo, in one place.
-- `lib/scheduling.js` — generates available slots and checks them against a
-  local `bookings.json` file so two callers can't get double-booked.
+- `lib/scheduling.js` — generates candidate slots and checks them against
+  real `jobs` rows in Supabase (by date + time window) so two callers can't
+  get double-booked.
+- `lib/booking.js` — creates/reuses the `customers` row, inserts the `jobs`
+  row, and keeps a `calls` row (quote given, outcome) in sync across the
+  whole conversation.
+- `lib/supabase.js` — the Supabase client, authenticated as the service
+  role since a phone call has no logged-in user to scope RLS to.
 - `vapi-assistant.json` — the assistant definition: voice, system prompt,
   and the three tools, ready to send to Vapi's API.
+
+## Step 0: Point this server at a real company
+
+This server has no concept of "no company yet" — every booking needs a
+`company_id` to attach to. Sign up as the owner through the dashboard app
+first (see the root `AUTH.md`), then in the Supabase dashboard: **Table
+Editor → companies**, copy the `id` of your row, and set it as
+`SUPABASE_COMPANY_ID` (see `.env.example`). Nothing in this server will
+work correctly until that's set.
 
 ## Step 1: Create accounts
 
@@ -81,16 +98,27 @@ running your actual pricing and scheduling logic.
 
 - **Security**: set `VAPI_WEBHOOK_SECRET` in your deployment's environment
   variables and add the matching Authorization header in Vapi's tool
-  config, so randoms can't hit your webhook directly.
-- **Real calendar**: `bookings.json` works for a demo but isn't safe for
-  concurrent real bookings long-term. Swap `lib/scheduling.js` for a call
-  to Google Calendar's freebusy API, or whatever scheduling tool the
-  business already uses (Jobber and Housecall Pro both have availability
-  APIs).
+  config, so randoms can't hit your webhook directly. Separately, guard
+  `SUPABASE_SERVICE_ROLE_KEY` closely — it bypasses every RLS policy in the
+  database, unlike the publishable key the browser app uses.
+- **Untested call-context assumption**: `server.js` reads the caller's
+  phone number and Vapi's call id from `message.call.id` /
+  `message.call.customer.number` on the webhook body, per Vapi's
+  documented server-message format — but this hasn't been exercised
+  against a real live call yet. First real test call, check the Supabase
+  `calls` table (or Render's logs) to confirm `vapi_call_id` and
+  `customer_phone` actually populated; if not, check the raw payload
+  shape (Vapi dashboard → Calls → your call → "Logs" has the raw webhook
+  body) and adjust `server.js`'s `callContext` extraction.
+- **Real-time pricing sync**: `lib/pricing.js` still has its own hardcoded
+  copy of the job types/rates, separate from the `companies` and
+  `job_types` tables the dashboard's Settings page would eventually let an
+  owner edit. If those are changed in the dashboard, this server won't
+  know until `lib/pricing.js` is updated to read from Supabase too.
 - **SMS confirmation**: Vapi has a built-in `sms` tool that can text the
   customer a booking confirmation right after the call, using the Twilio
   account you already connected. Worth adding once the core flow works.
 - **Per-client pricing**: everything in `lib/pricing.js` is one file. To
   resell this to a second plumbing company, copy the project, change the
-  numbers, and create a second Vapi assistant pointed at a second Twilio
-  number.
+  numbers, and create a second Vapi assistant, Supabase company, and
+  Twilio number.

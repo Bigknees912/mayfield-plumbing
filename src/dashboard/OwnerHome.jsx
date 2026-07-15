@@ -4,6 +4,7 @@ import { getDashboardStats, listOpenFeedback } from '../lib/dashboard'
 import { listRecentJobs } from '../lib/jobs'
 import { LIGHT } from '../theme'
 import { StatCard, SectionLabel, Badge, EmptyState, money, STATUS_META, URGENCY_STYLE } from './ui'
+import { useJobsRealtime } from './useJobsRealtime'
 
 // Ported from app-demo.jsx's OwnerHome. Weather-alert banner dropped - it
 // read a hardcoded Calgary forecast with no real data source. "Recovered"
@@ -16,20 +17,21 @@ export default function OwnerHome({ businessProfile }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  async function reload() {
+    const [s, j, f] = await Promise.all([getDashboardStats(), listRecentJobs(6), listOpenFeedback()])
+    setStats(s)
+    setJobs(j)
+    setFeedback(f)
+  }
+
   useEffect(() => {
-    let cancelled = false
     setLoading(true)
-    Promise.all([getDashboardStats(), listRecentJobs(6), listOpenFeedback()])
-      .then(([s, j, f]) => {
-        if (cancelled) return
-        setStats(s)
-        setJobs(j)
-        setFeedback(f)
-      })
-      .catch((err) => !cancelled && setError(err.message))
-      .finally(() => !cancelled && setLoading(false))
-    return () => { cancelled = true }
+    reload().catch((err) => setError(err.message)).finally(() => setLoading(false))
   }, [])
+
+  // Picks up a job Alex books over the phone (or any other change) live,
+  // without a manual refresh.
+  useJobsRealtime(businessProfile?.id, () => { reload().catch((err) => setError(err.message)) })
 
   if (loading) return <EmptyState>Loading…</EmptyState>
   if (error) return <EmptyState>{error}</EmptyState>

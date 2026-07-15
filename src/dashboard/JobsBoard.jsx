@@ -4,6 +4,7 @@ import { listJobs, listJobTypes, listTeamTechs, listTechLocationsById, assignJob
 import { LIGHT } from '../theme'
 import { SectionLabel, Badge, EmptyState, money, initialsOf, STATUS_META } from './ui'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
+import { useJobsRealtime } from './useJobsRealtime'
 
 const COLUMNS = ['unassigned', 'assigned', 'in_progress', 'done']
 
@@ -37,6 +38,10 @@ export default function JobsBoard({ company }) {
     setLoading(true)
     reload().catch((err) => setError(err.message)).finally(() => setLoading(false))
   }, [])
+
+  // Picks up a job Alex books over the phone (or any other change) live,
+  // without a manual refresh.
+  useJobsRealtime(company?.id, () => { reload().catch((err) => setError(err.message)) })
 
   async function handleAssign(jobId, techId, currentStatus) {
     await assignJob(jobId, techId, currentStatus)

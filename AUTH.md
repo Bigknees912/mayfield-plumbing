@@ -98,10 +98,45 @@ them in the demo and this task is specifically about persistence:
   those columns have no geocoding or GPS pipeline populating them yet, so
   it will show "—" until one exists.
 
-**Not built**: real-time sync (every screen fetches on mount/after a
-mutation, not via Supabase Realtime — multiple browser tabs won't see each
-other's writes without a manual refresh), job photo attachments, and
-anything under the demo's Map/Clients/Insights/Team/Settings tabs.
+**Not built**: job photo attachments, and anything under the demo's
+Map/Clients/Insights/Team/Settings tabs.
+
+## receptionist-server → same database
+
+`receptionist-server` (the Vapi phone AI) now reads/writes the exact same
+`jobs`/`customers`/`calls`/`job_types` tables instead of a local
+`bookings.json` file — a job Alex books over the phone is a real row the
+owner's Jobs board and Home stats can see. Details:
+
+- **New files**: `receptionist-server/lib/supabase.js` (service-role
+  client — there's no logged-in user on a phone call, so it bypasses RLS
+  and must filter by `company_id` explicitly on every query),
+  `lib/booking.js` (`recordQuote` upserts a `calls` row keyed by Vapi's
+  call id every time `get_quote` runs; `createBooking` finds/creates the
+  `customers` row, inserts the `jobs` row, marks the call `outcome:
+  'booked'`). `lib/scheduling.js` was rewritten to check real `jobs` rows
+  for conflicts instead of `bookings.json`.
+- **New required env vars** (`receptionist-server/.env.example`):
+  `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (from the Supabase dashboard
+  — never expose client-side, unlike the publishable key), and
+  `SUPABASE_COMPANY_ID` — this deployed server answers calls for exactly
+  one company, so it needs that company's id. **There's no company to
+  point it at until someone completes owner signup through the dashboard
+  app once** — this is a hard prerequisite, not just a nice-to-have.
+- **`customerName` added**: `customers.name` is `NOT NULL`, but the voice
+  flow never asked for one. `vapi-assistant.json`'s system prompt and the
+  `book_appointment` tool schema now collect it before booking.
+- **Live dashboard updates**: `jobs` was added to the `supabase_realtime`
+  publication (migration `013_enable_realtime_on_jobs`), and
+  `src/dashboard/useJobsRealtime.js` subscribes `OwnerHome`/`JobsBoard` to
+  it (filtered to the company, still RLS-scoped per client) — a phone
+  booking appears without the owner refreshing.
+- **Untested against a real call**: `server.js` assumes Vapi's webhook
+  body carries the caller's number and call id at
+  `message.call.customer.number` / `message.call.id`, per Vapi's
+  documented format — this hasn't been exercised against an actual phone
+  call yet. First real test call, check the `calls` table (or Render
+  logs) to confirm those populated.
 
 ## Signup flow
 

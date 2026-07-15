@@ -1,6 +1,12 @@
 const express = require("express");
 const { calcQuote } = require("./lib/pricing");
-const { nextAvailableSlots, bookSlot } = require("./lib/scheduling");
+const { nextAvailableSlots } = require("./lib/scheduling");
+const { recordQuote, createBooking } = require("./lib/booking");
+const { getCompanyId, validateEnv } = require("./lib/supabase");
+
+// Fail loudly at boot if Supabase env vars are missing, instead of only
+// discovering it on the first real phone call.
+validateEnv();
 
 const app = express();
 app.use(express.json());
@@ -18,21 +24,32 @@ function checkAuth(req, res, next) {
 }
 
 // Vapi sends every tool call for the assistant to this one endpoint, batched
-// as toolCallList. We loop over it and return one result per call.
-app.post("/vapi/webhook", checkAuth, (req, res) => {
+// as toolCallList, alongside call metadata (id, caller's number) under
+// message.call. That shape is per Vapi's documented server-message format -
+// worth double-checking against a real call's payload (e.g. via get_logs)
+// the first time you test this live, since it's untested against an actual
+// call from this end.
+app.post("/vapi/webhook", checkAuth, async (req, res) => {
   const toolCalls = req.body?.message?.toolCallList || [];
-  const results = toolCalls.map((call) => {
-    try {
-      const output = runTool(call.name, call.arguments || {});
-      return { toolCallId: call.id, result: JSON.stringify(output) };
-    } catch (err) {
-      return { toolCallId: call.id, result: `Error: ${err.message}` };
-    }
-  });
+  const call = req.body?.message?.call || {};
+  const callContext = { vapiCallId: call.id, customerPhone: call.customer?.number };
+
+  const results = await Promise.all(
+    toolCalls.map(async (toolCall) => {
+      try {
+        const output = await runTool(toolCall.name, toolCall.arguments || {}, callContext);
+        return { toolCallId: toolCall.id, result: JSON.stringify(output) };
+      } catch (err) {
+        return { toolCallId: toolCall.id, result: `Error: ${err.message}` };
+      }
+    })
+  );
   res.json({ results });
 });
 
-function runTool(name, args) {
+async function runTool(name, args, callContext) {
+  const companyId = getCompanyId();
+
   switch (name) {
     case "get_quote": {
       const q = calcQuote({
@@ -40,6 +57,15 @@ function runTool(name, args) {
         property: args.property,
         urgency: args.urgency,
         partsTier: args.partsTier,
+      });
+      await recordQuote({
+        companyId,
+        vapiCallId: callContext.vapiCallId,
+        customerPhone: callContext.customerPhone,
+        jobType: args.jobType,
+        urgency: args.urgency,
+        property: args.property,
+        quote: q,
       });
       return {
         jobLabel: q.jobLabel,
@@ -50,16 +76,19 @@ function runTool(name, args) {
     }
 
     case "check_availability": {
-      const slots = nextAvailableSlots(args.urgency || "standard");
+      const slots = await nextAvailableSlots(args.urgency || "standard", companyId);
       return { slots };
     }
 
     case "book_appointment": {
-      const result = bookSlot({
+      const result = await createBooking({
+        companyId,
+        vapiCallId: callContext.vapiCallId,
         slot: args.slot,
         jobType: args.jobType,
         address: args.address,
-        customerPhone: args.customerPhone,
+        customerPhone: args.customerPhone || callContext.customerPhone,
+        customerName: args.customerName,
       });
       if (!result.ok) return { booked: false, reason: result.reason };
       return { booked: true, slot: args.slot };
