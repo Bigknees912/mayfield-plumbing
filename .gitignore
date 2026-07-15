@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.local
+
+# receptionist-server's local booking store - runtime state, not source.
+# On most hosts (Render free tier, etc.) this resets on every deploy/restart
+# anyway since the filesystem isn't persistent - see receptionist-server's
+# deployment notes.
+bookings.json
+
+# Claude Code local settings (per-machine, not shared)
+.claude/settings.local.json

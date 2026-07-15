@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+  :root {
+    --ink: #1C2530; --ink2: #232E3B; --paper: #F3EFE4; --line: #D8D0BC;
+    --copper: #B8703F; --copperBright: #D68C4E; --slate: #5B6B7A;
+    --success: #3F7A5C; --alert: #C1440E;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .wrap { min-height: 100%; background: var(--ink); font-family: 'Inter', sans-serif; padding: 32px 20px; }
+  .grid { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 1.05fr 1fr; gap: 24px; }
+  .eyebrow { color: var(--copperBright); font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 2px; margin-bottom: 6px; }
+  h1 { color: var(--paper); font-family: 'Oswald', sans-serif; font-size: 30px; font-weight: 600; margin: 0 0 24px 0; }
+  .phone { background: var(--ink2); border: 1px solid #33404F; border-radius: 6px; display: flex; flex-direction: column; height: 560px; }
+  .phone-header { padding: 16px 18px; border-bottom: 1px solid #33404F; display: flex; align-items: center; justify-content: space-between; }
+  .caller-info { display: flex; align-items: center; gap: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .caller-name { color: var(--paper); font-size: 14px; font-weight: 600; }
+  .caller-num { color: var(--slate); font-size: 11.5px; font-family: 'IBM Plex Mono', monospace; }
+  .timer { color: var(--slate); font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; }
+  .transcript { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .bubble { max-width: 82%; padding: 10px 13px; border-radius: 10px; font-size: 13.5px; line-height: 1.45; }
+  .bubble.ai { background: #2C3947; color: #DCE3E9; align-self: flex-start; border-bottom-left-radius: 2px; }
+  .bubble.ai .who { color: var(--copperBright); font-size: 10.5px; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .bubble.caller { background: var(--copper); color: #FBF3EA; align-self: flex-end; border-bottom-right-radius: 2px; }
+  .bubble.caller .who { color: #F6D9BE; font-size: 10.5px; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .status-row { color: var(--slate); font-size: 12px; font-style: italic; padding: 0 18px 8px 18px; min-height: 16px; }
+
+  .mic-area { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 18px 18px 18px; border-top: 1px solid #33404F; }
+  .mic-btn {
+    width: 64px; height: 64px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--copper); color: var(--paper); display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .mic-btn:active { transform: scale(0.94); }
+  .mic-btn.listening { background: var(--alert); animation: micpulse 1.2s infinite; }
+  .mic-btn.speaking { background: var(--slate); }
+  .mic-btn:disabled { opacity: 0.5; cursor: default; }
+  @keyframes micpulse { 0% { box-shadow: 0 0 0 0 rgba(193,68,14,0.5); } 70% { box-shadow: 0 0 0 14px rgba(193,68,14,0); } 100% { box-shadow: 0 0 0 0 rgba(193,68,14,0); } }
+  .mic-label { color: var(--paper); font-size: 12.5px; font-weight: 600; }
+  .hint { color: #55626F; font-size: 11px; text-align: center; }
+  .fallback-note { background: #3A2A1A; border: 1px solid var(--copper); border-radius: 8px; padding: 12px 14px; color: var(--paper); font-size: 12.5px; line-height: 1.5; margin: 0 18px 14px 18px; }
+
+  .ticket { background: var(--paper); border-radius: 6px; overflow: hidden; align-self: start; }
+  .perf { height: 14px; background-image: radial-gradient(circle at 10px 7px, var(--ink) 5px, transparent 5.5px); background-size: 20px 14px; background-color: var(--paper); }
+  .ticket-body { padding: 8px 26px 24px 26px; }
+  .ticket-top { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .ticket-top span { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--slate); }
+  .hr { height: 1px; background: var(--line); margin: 10px 0 16px 0; }
+  .field-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 13px; border-bottom: 1px dashed var(--line); }
+  .field-row .k { color: var(--slate); }
+  .field-row .v { color: var(--ink); font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+  .v.pending { color: #B7AE98; font-weight: 500; }
+  .total-label { font-family: 'Oswald', sans-serif; font-size: 13px; color: var(--ink); letter-spacing: 0.5px; margin-top: 16px; }
+  .total-value { font-family: 'IBM Plex Mono', monospace; font-size: 30px; font-weight: 600; color: var(--ink); margin: 4px 0 4px 0; }
+  .total-sub { font-size: 11.5px; color: var(--slate); margin-bottom: 4px; }
+  .empty-ticket { text-align: center; color: var(--slate); font-size: 13px; padding: 50px 0; line-height: 1.6; }
+  .footer-note { max-width: 980px; margin: 20px auto 0 auto; font-size: 11.5px; color: #4E5A67; font-family: 'IBM Plex Mono', monospace; }
+</style>
+
+<div class="wrap">
+  <div class="grid">
+    <div>
+      <div class="eyebrow">MAYFIELD PLUMBING &amp; DRAIN — VOICE CALL SIMULATOR</div>
+      <h1>Talk to Alex, For Real</h1>
+      <div class="phone">
+        <div class="phone-header">
+          <div class="caller-info">
+            <div class="dot"></div>
+            <div><div class="caller-name">Incoming Call</div><div class="caller-num">(403) 555-0142</div></div>
+          </div>
+          <div class="timer" id="timer">00:00</div>
+        </div>
+        <div class="transcript" id="transcript"></div>
+        <div class="status-row" id="statusRow"></div>
+        <div id="fallbackNote" style="display:none;" class="fallback-note">
+          Your browser doesn't support voice input (this needs Chrome or Edge, on desktop or Android). Safari and Firefox aren't supported yet. You can still type below.
+        </div>
+        <div class="mic-area">
+          <button class="mic-btn" id="micBtn">
+            <svg id="micIcon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </button>
+          <div class="mic-label" id="micLabel">Tap to talk</div>
+          <div class="hint">Try: "Hi, my basement drain is backed up and it's flooding"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ticket">
+      <div class="perf"></div>
+      <div class="ticket-body">
+        <div class="ticket-top"><span id="ticketNo">DISPATCH #—</span><span id="ticketDate"></span></div>
+        <div class="hr"></div>
+        <div id="ticketContent"><div class="empty-ticket">Start the call on the left.<br/>Alex fills this in as the caller talks.</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-note">DEMO BUILD — real speech recognition and real text-to-speech, same live AI model and pricing logic as the typed version.</div>
+</div>
+
+<script>
+  const JOB_TYPES = {
+    drain:       { label: "Drain Cleaning",              baseFee: 149, hours: 1,   hourly: 135, parts: 0   },
+    faucet:      { label: "Faucet Repair / Install",     baseFee: 149, hours: 1.5, hourly: 135, parts: 80  },
+    toilet:      { label: "Toilet Repair / Install",     baseFee: 149, hours: 1.5, hourly: 135, parts: 120 },
+    waterheater: { label: "Water Heater Install / Repair",baseFee: 149, hours: 3,   hourly: 145, parts: 950 },
+    pipeleak:    { label: "Pipe Repair / Leak",          baseFee: 149, hours: 2,   hourly: 145, parts: 150 },
+    sump:        { label: "Sump Pump",                   baseFee: 149, hours: 2.5, hourly: 145, parts: 400 },
+  };
+  const URGENCY = {
+    standard:  { label: "Standard",  mult: 1 },
+    sameday:   { label: "Same-Day",  mult: 1.25 },
+    emergency: { label: "Emergency", mult: 1.75 },
+  };
+  const PARTS = { basic: 0.75, mid: 1, premium: 1.6 };
+
+  function weekdayLabel(d) { return d.toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" }); }
+  const BUSY_SLOTS = new Set();
+  function nextAvailableSlots(urgency) {
+    if (urgency === "emergency") return ["ASAP — next tech dispatched, 60-90 min ETA"];
+    let candidates;
+    if (urgency === "sameday") {
+      candidates = ["Today, 2:00-4:00 PM", "Today, 4:30-6:30 PM", "Today, 6:30-8:30 PM"];
+    } else {
+      candidates = [];
+      let d = new Date();
+      while (candidates.length < 6) {
+        d.setDate(d.getDate() + 1);
+        const day = d.getDay();
+        if (day === 0 || day === 6) continue;
+        const w = candidates.length % 2 === 0 ? "9:00-11:00 AM" : "1:00-3:00 PM";
+        candidates.push(weekdayLabel(new Date(d)) + ", " + w);
+      }
+    }
+    const open = candidates.filter((s) => !BUSY_SLOTS.has(s));
+    return open.slice(0, urgency === "sameday" ? 2 : 3);
+  }
+  function markSlotBooked(slot) { BUSY_SLOTS.add(slot); }
+  function money(n) { return n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }); }
+
+  const state = {
+    fields: { jobType: null, urgency: null, property: null, partsTier: null, address: null, bookingSlot: null },
+    history: [], quoted: false, booked: false,
+  };
+
+  const ticketNo = Math.floor(10000 + Math.random() * 89999);
+  document.getElementById("ticketNo").textContent = "DISPATCH #" + ticketNo;
+  document.getElementById("ticketDate").textContent = new Date().toLocaleDateString("en-CA");
+
+  let seconds = 0;
+  setInterval(() => {
+    seconds++;
+    const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+    const s = String(seconds % 60).padStart(2, "0");
+    document.getElementById("timer").textContent = m + ":" + s;
+  }, 1000);
+
+  const transcriptEl = document.getElementById("transcript");
+  const statusRow = document.getElementById("statusRow");
+  const micBtn = document.getElementById("micBtn");
+  const micLabel = document.getElementById("micLabel");
+
+  function addBubble(who, text) {
+    const div = document.createElement("div");
+    div.className = "bubble " + (who === "Alex" ? "ai" : "caller");
+    div.innerHTML = '<div class="who">' + who + '</div>' + text;
+    transcriptEl.appendChild(div);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  function renderTicket() {
+    const f = state.fields;
+    const job = f.jobType ? JOB_TYPES[f.jobType] : null;
+    const content = document.getElementById("ticketContent");
+    if (!job && !f.property && !f.urgency && !f.address) {
+      content.innerHTML = '<div class="empty-ticket">Start the call on the left.<br/>Alex fills this in as the caller talks.</div>';
+      return;
+    }
+    let html = "";
+    html += row("Job type", job ? job.label : null);
+    html += row("Property", f.property ? (f.property === "residential" ? "Residential" : "Commercial") : null);
+    html += row("Urgency", f.urgency ? URGENCY[f.urgency].label : null);
+    html += row("Address", f.address || null);
+    html += row("Parts tier", f.partsTier ? (f.partsTier[0].toUpperCase() + f.partsTier.slice(1)) : "Standard (default)");
+
+    if (job && f.urgency && f.property) {
+      const tierMult = PARTS[f.partsTier || "mid"];
+      const commercialBump = f.property === "commercial" ? 1.15 : 1;
+      const laborRaw = job.hours * job.hourly;
+      const partsRaw = job.parts * tierMult;
+      const subtotal = (job.baseFee + laborRaw + partsRaw) * commercialBump;
+      const withUrgency = subtotal * URGENCY[f.urgency].mult;
+      const low = Math.round((withUrgency * 0.92) / 5) * 5;
+      const high = Math.round((withUrgency * 1.1) / 5) * 5;
+      html += '<div class="total-label">ESTIMATED RANGE</div>';
+      html += '<div class="total-value">' + money(low) + ' &ndash; ' + money(high) + '</div>';
+      html += '<div class="total-sub">Confirmed exact price after on-site inspection.</div>';
+      if (!state.quoted) {
+        state.quoted = true;
+        setTimeout(() => speakAndShow("That runs " + money(low) + " to " + money(high) + ". Want me to book it?"), 400);
+      }
+      if (f.bookingSlot) {
+        html += row("Appointment", f.bookingSlot);
+        if (!state.booked) {
+          state.booked = true;
+          markSlotBooked(f.bookingSlot);
+          setTimeout(() => speakAndShow("You're booked for " + f.bookingSlot + ". See you then!"), 400);
+        }
+      }
+    }
+    content.innerHTML = html;
+  }
+  function row(label, value) {
+    return '<div class="field-row"><span class="k">' + label + '</span><span class="v ' + (value ? "" : "pending") + '">' + (value || "pending…") + '</span></div>';
+  }
+
+  function buildSystemPrompt() {
+    let base = `You are Alex, the AI phone receptionist for Mayfield Plumbing & Drain, a plumbing company in Calgary, Alberta. You are on a live phone call with a customer.
+
+This is a real phone call, not a chat. Nobody stays on the line for a paragraph. Follow these rules strictly:
+- One short sentence per turn. Two only if absolutely necessary.
+- Under 15 words per turn whenever possible.
+- Ask exactly one question at a time, never stack questions.
+- No filler like "I understand" or "Thank you for that information." Talk like a busy, competent human dispatcher: quick, plain, warm but brief.
+- Your reply will be spoken aloud by text-to-speech, so avoid anything that reads oddly out loud: no bullet points, no symbols, no parentheses.
+
+Your job is to figure out:
+- jobType: one of [drain, faucet, toilet, waterheater, pipeleak, sump] based on what the caller describes
+- property: "residential" or "commercial"
+- urgency: "standard", "sameday", or "emergency" (infer emergency automatically from flooding, burst pipes, sewage, no heat in freezing weather)
+- address: the caller's full street address in Calgary, ask plainly, never ask for a city quadrant
+- partsTier: "basic", "mid", or "premium" if mentioned, otherwise leave null
+- bookingSlot: the day/time the caller agrees to, once offered
+
+Do not state a dollar price yourself, ever. Pricing is calculated separately and shown automatically once enough info is known.`;
+
+    if (state.quoted) {
+      const slots = nextAvailableSlots(state.fields.urgency || "standard");
+      base += `
+
+The price has already been quoted by the system. Once the caller agrees to book, ask what day works, then offer these real windows briefly: ${slots.join(" / ")}. If they name a day not on the list, accept it as their slot and confirm it back in one short line.`;
+    }
+    base += `
+
+Respond ONLY with valid JSON, no markdown fences, no preamble. Format exactly:
+{"say": "your spoken reply as Alex", "fields": {"jobType": null or enum, "property": null or "residential"/"commercial", "urgency": null or enum, "address": null or string, "partsTier": null or enum, "bookingSlot": null or string}}
+
+Only include non-null values you're confident about. Never overwrite a known field with null.`;
+    return base;
+  }
+
+  function speakAndShow(text) {
+    addBubble("Alex", text);
+    renderTicket();
+    speak(text);
+  }
+
+  async function callAlex(userText) {
+    state.history.push({ role: "user", content: userText });
+    setStatus("Alex is thinking…");
+    micBtn.disabled = true;
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, system: buildSystemPrompt(), messages: state.history }),
+      });
+      const data = await response.json();
+      const textBlock = (data.content || []).find(b => b.type === "text");
+      let raw = textBlock ? textBlock.text : "{}";
+      raw = raw.replace(/```json|```/g, "").trim();
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch (e) { parsed = { say: "Sorry, could you say that again?", fields: {} }; }
+      state.history.push({ role: "assistant", content: JSON.stringify(parsed) });
+      const f = parsed.fields || {};
+      for (const key of ["jobType", "property", "urgency", "address", "partsTier", "bookingSlot"]) {
+        if (f[key]) state.fields[key] = f[key];
+      }
+      addBubble("Alex", parsed.say || "Got it.");
+      renderTicket();
+      speak(parsed.say || "Got it.");
+    } catch (err) {
+      addBubble("Alex", "Sorry, I'm having trouble connecting. Demo error: " + err.message);
+      setStatus("");
+      micBtn.disabled = false;
+    }
+  }
+
+  function setStatus(text) { statusRow.textContent = text; }
+
+  // ---- Text to speech ----
+  function speak(text) {
+    if (!('speechSynthesis' in window)) { micBtn.disabled = false; setStatus(""); return; }
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.05;
+    utter.onstart = () => { micBtn.classList.add("speaking"); micLabel.textContent = "Alex is speaking…"; setStatus(""); };
+    utter.onend = () => { micBtn.classList.remove("speaking"); micLabel.textContent = "Tap to talk"; micBtn.disabled = false; };
+    window.speechSynthesis.speak(utter);
+  }
+
+  // ---- Speech to text ----
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizing = false;
+  let recognizer = null;
+
+  if (!SpeechRecognition) {
+    document.getElementById("fallbackNote").style.display = "block";
+    micBtn.disabled = true;
+    micLabel.textContent = "Voice not supported here";
+  } else {
+    recognizer = new SpeechRecognition();
+    recognizer.lang = "en-CA";
+    recognizer.interimResults = false;
+    recognizer.maxAlternatives = 1;
+
+    recognizer.onstart = () => {
+      recognizing = true;
+      micBtn.classList.add("listening");
+      micLabel.textContent = "Listening… tap to stop";
+      setStatus("");
+    };
+    recognizer.onend = () => {
+      recognizing = false;
+      micBtn.classList.remove("listening");
+      if (micLabel.textContent === "Listening… tap to stop") micLabel.textContent = "Tap to talk";
+    };
+    recognizer.onerror = (e) => {
+      recognizing = false;
+      micBtn.classList.remove("listening");
+      micLabel.textContent = "Tap to talk";
+      if (e.error === "not-allowed") setStatus("Microphone permission denied.");
+      else if (e.error !== "no-speech") setStatus("Mic error: " + e.error);
+    };
+    recognizer.onresult = (event) => {
+      const text = event.results[0][0].transcript;
+      addBubble("Caller", text);
+      callAlex(text);
+    };
+  }
+
+  micBtn.addEventListener("click", () => {
+    if (!recognizer) return;
+    window.speechSynthesis.cancel();
+    if (recognizing) { recognizer.stop(); return; }
+    try { recognizer.start(); } catch (e) { /* already started */ }
+  });
+
+  // Opening greeting
+  setTimeout(() => speakAndShowGreeting(), 300);
+  function speakAndShowGreeting() {
+    const greeting = "Mayfield Plumbing, this is Alex. What's going on?";
+    addBubble("Alex", greeting);
+    speak(greeting);
+  }
+</script>
