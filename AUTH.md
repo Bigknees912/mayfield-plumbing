@@ -138,6 +138,64 @@ owner's Jobs board and Home stats can see. Details:
   call yet. First real test call, check the `calls` table (or Render
   logs) to confirm those populated.
 
+## Deposit collection (Stripe)
+
+Real Stripe Checkout, not a fake "Send Deposit Link" button — the demo's
+button had no `onClick` at all. Runs as two Supabase Edge Functions, source
+in `supabase/functions/`:
+
+- **`create-deposit-checkout`** (`verify_jwt: true`) — called from
+  `JobsBoard`'s "Send Deposit Link" button via
+  `supabase.functions.invoke(...)`, which auto-attaches the owner's
+  session JWT. Re-validates server-side that the job is actually over
+  `companies.deposit_threshold` (never trusts the client), checks the
+  caller's `profiles.role` is `'owner'` (defense-in-depth beyond RLS —
+  a tech *could* technically hit this for their own assigned job per the
+  `jobs_update` policy, but the button only exists on the owner-only Jobs
+  board, so the function enforces that same boundary), creates a real
+  Stripe Checkout Session for the computed deposit amount, and sets
+  `jobs.deposit_status = 'pending'` + `stripe_checkout_session_id`. Uses a
+  per-request client built from the forwarded `Authorization` header (not
+  the service role) so it's RLS-scoped to the caller's own company, same
+  guarantee as every other write in this app.
+- **`stripe-webhook`** (`verify_jwt: false` — Stripe has no Supabase
+  session; the `Stripe-Signature` header verified inside the function *is*
+  the auth) — listens for `checkout.session.completed` and flips
+  `jobs.deposit_status` to `'paid'` with `deposit_paid_at`, matched by
+  both `job_id` (from Stripe's session `metadata`) and
+  `stripe_checkout_session_id`. Uses the service-role client, same pattern
+  as `receptionist-server`.
+
+**Schema**: `jobs` gained `deposit_status` (`none`/`pending`/`paid`),
+`deposit_amount` (locked in at send-time — a later change to
+`deposit_pct` in Settings doesn't retroactively change what was already
+requested), `stripe_checkout_session_id`, `deposit_paid_at`. `jobs` was
+already in the Realtime publication (from the phone-booking work), so a
+webhook-driven `'paid'` flip shows up live on the dashboard too, same as
+everything else.
+
+**One-time Stripe setup** (I can't create the account or click through
+their dashboard for you):
+1. Sign up at [stripe.com](https://stripe.com) (or use an existing
+   account). Toggle **Test mode** first — use test card `4242 4242 4242
+   4242`, any future expiry/CVC, to try this end-to-end before going live.
+2. **Developers → API keys**: copy the **Secret key**.
+3. Supabase dashboard → **Edge Functions → Secrets** (no CLI needed):
+   add `STRIPE_SECRET_KEY` with that value.
+4. **Developers → Webhooks → Add endpoint**: URL
+   `https://umtoseyxvszdxbuvuyuk.supabase.co/functions/v1/stripe-webhook`,
+   event: `checkout.session.completed`. After creating it, copy its
+   **Signing secret** and add it in the same Supabase Secrets page as
+   `STRIPE_WEBHOOK_SECRET`.
+5. Flip to **Live mode** and repeat steps 2 and 4 (test and live keys/
+   webhooks are separate in Stripe) once you're ready for real charges.
+
+**Known limitation**: there's no automated delivery (SMS/email) of the
+checkout link — "Send Deposit Link" opens a modal with the real Stripe URL
+for the owner to copy/open and share manually (read it over the phone,
+text it themselves). Wiring actual SMS delivery would reuse the Twilio
+account already connected for the receptionist.
+
 ## Signup flow
 
 A new `auth.users` row has no `company_id` or `role` yet, so two RPCs bridge

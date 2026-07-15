@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, DollarSign, Plus, X, Route } from 'lucide-react'
+import { CheckCircle2, DollarSign, Plus, X, Route, Copy, ExternalLink } from 'lucide-react'
 import { listJobs, listJobTypes, listTeamTechs, listTechLocationsById, assignJob, findOrCreateCustomer, createJob, distanceKm } from '../lib/jobs'
+import { createDepositCheckout } from '../lib/deposits'
 import { LIGHT } from '../theme'
 import { SectionLabel, Badge, EmptyState, money, initialsOf, STATUS_META } from './ui'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
@@ -25,6 +26,9 @@ export default function JobsBoard({ company }) {
   const [error, setError] = useState('')
   const [pickerFor, setPickerFor] = useState(null)
   const [newJobOpen, setNewJobOpen] = useState(false)
+  const [sendingDepositId, setSendingDepositId] = useState(null)
+  const [depositError, setDepositError] = useState('')
+  const [depositLink, setDepositLink] = useState(null)
 
   async function reload() {
     const [j, t, locs, jt] = await Promise.all([listJobs(), listTeamTechs(), listTechLocationsById(), listJobTypes()])
@@ -49,6 +53,20 @@ export default function JobsBoard({ company }) {
     await reload()
   }
 
+  async function handleSendDeposit(jobId) {
+    setSendingDepositId(jobId)
+    setDepositError('')
+    try {
+      const result = await createDepositCheckout(jobId)
+      setDepositLink({ url: result.url, amount: result.amount })
+      await reload()
+    } catch (err) {
+      setDepositError(err.message)
+    } finally {
+      setSendingDepositId(null)
+    }
+  }
+
   if (loading) return <EmptyState>Loading…</EmptyState>
   if (error) return <EmptyState>{error}</EmptyState>
 
@@ -62,6 +80,12 @@ export default function JobsBoard({ company }) {
           <Plus size={13} /> New Job
         </button>
       </div>
+      {depositError && (
+        <div style={{ background: LIGHT.alertSoft, color: LIGHT.alert, borderRadius: 10, padding: '10px 12px', fontSize: 12, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span>{depositError}</span>
+          <button className="tap" onClick={() => setDepositError('')}><X size={14} color={LIGHT.alert} /></button>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {COLUMNS.map((col) => {
           const colJobs = jobs.filter((j) => j.status === col)
@@ -93,8 +117,28 @@ export default function JobsBoard({ company }) {
                         <button className="tap" onClick={() => setPickerFor(j.id)} style={{ fontSize: 16, color: LIGHT.sub, padding: '4px 6px', flexShrink: 0 }}>⋯</button>
                       </div>
                       {needsDeposit && (
-                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${LIGHT.border}`, fontSize: 11, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <DollarSign size={11} color={LIGHT.accent} /> Deposit due: {money(depositAmount(j.price_high, company.deposit_pct))}
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${LIGHT.border}` }}>
+                          {j.deposit_status === 'paid' ? (
+                            <div style={{ fontSize: 11, color: LIGHT.success, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <CheckCircle2 size={11} /> Deposit paid — {money(j.deposit_amount)}
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                              <div style={{ fontSize: 11, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <DollarSign size={11} color={LIGHT.accent} />
+                                Deposit due: {money(j.deposit_amount ?? depositAmount(j.price_high, company.deposit_pct))}
+                                {j.deposit_status === 'pending' && <span style={{ color: LIGHT.accent, fontWeight: 600 }}>· link sent</span>}
+                              </div>
+                              <button
+                                className="tap"
+                                onClick={() => handleSendDeposit(j.id)}
+                                disabled={sendingDepositId === j.id}
+                                style={{ fontSize: 10.5, fontWeight: 600, color: LIGHT.accent, whiteSpace: 'nowrap', flexShrink: 0 }}
+                              >
+                                {sendingDepositId === j.id ? 'Sending…' : j.deposit_status === 'pending' ? 'Resend Link' : 'Send Deposit Link'}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -123,7 +167,46 @@ export default function JobsBoard({ company }) {
           onCreated={async () => { setNewJobOpen(false); await reload() }}
         />
       )}
+      {depositLink && <DepositLinkModal link={depositLink} onClose={() => setDepositLink(null)} />}
     </>
+  )
+}
+
+// Shows the real Stripe Checkout URL right after it's created. There's no
+// automated SMS/email delivery wired up, so "sending" it means the owner
+// copies/opens this and shares it with the customer themselves (read it
+// over the phone, text it manually, etc).
+function DepositLinkModal({ link, onClose }) {
+  const [copied, setCopied] = useState(false)
+
+  function copy() {
+    navigator.clipboard?.writeText(link.url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 20 }} onClick={onClose}>
+      <div style={{ background: LIGHT.card, borderRadius: 20, padding: 20, maxWidth: 380, width: '100%' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>Deposit link ready</div>
+          <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
+        </div>
+        <div style={{ fontSize: 12.5, color: LIGHT.sub, marginBottom: 16 }}>
+          {money(link.amount)} due. Share this link with the customer — it's a real Stripe checkout page.
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <input readOnly value={link.url} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 12, padding: '10px 12px', color: LIGHT.ink }} />
+          <button className="tap" onClick={copy} style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 10, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Copy size={15} color={LIGHT.ink} />
+          </button>
+        </div>
+        {copied && <div style={{ fontSize: 11.5, color: LIGHT.success, marginBottom: 10 }}>Copied</div>}
+        <a href={link.url} target="_blank" rel="noopener noreferrer" className="tap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: LIGHT.ink, color: '#fff', borderRadius: 10, padding: '11px 0', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+          <ExternalLink size={14} /> Open Checkout Page
+        </a>
+      </div>
+    </div>
   )
 }
 

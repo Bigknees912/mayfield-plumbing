@@ -486,6 +486,9 @@ export type Database = {
           completed_at: string | null
           created_at: string
           customer_id: string | null
+          deposit_amount: number | null
+          deposit_paid_at: string | null
+          deposit_status: string
           description: string
           id: string
           job_type_id: string | null
@@ -498,6 +501,7 @@ export type Database = {
           scheduled_window: string | null
           source: string
           status: string
+          stripe_checkout_session_id: string | null
           urgency: string
         }
         Insert: {
@@ -508,6 +512,9 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           customer_id?: string | null
+          deposit_amount?: number | null
+          deposit_paid_at?: string | null
+          deposit_status?: string
           description: string
           id?: string
           job_type_id?: string | null
@@ -520,6 +527,7 @@ export type Database = {
           scheduled_window?: string | null
           source?: string
           status?: string
+          stripe_checkout_session_id?: string | null
           urgency: string
         }
         Update: {
@@ -530,6 +538,9 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           customer_id?: string | null
+          deposit_amount?: number | null
+          deposit_paid_at?: string | null
+          deposit_status?: string
           description?: string
           id?: string
           job_type_id?: string | null
@@ -542,6 +553,7 @@ export type Database = {
           scheduled_window?: string | null
           source?: string
           status?: string
+          stripe_checkout_session_id?: string | null
           urgency?: string
         }
         Relationships: [
