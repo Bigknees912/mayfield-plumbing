@@ -257,6 +257,43 @@ URL for the business's Place ID.
 **Message sent**: `"Hi {FirstName}, thanks for choosing {CompanyName}! If
 you have a minute, a quick Google review helps us a lot: {link}"`.
 
+## "On the way" SMS on job start
+
+Same trigger/Vault/edge-function pattern as the review-request SMS above,
+fired when a tech taps Start Job (`jobs.status` transitions to
+`'in_progress'`). Because `TechHome`'s Start Job button already just does
+a plain `jobs.status` update through `advanceJobStatus()`, **no frontend
+change was needed at all** — the trigger fires on that write regardless.
+
+- Trigger: `jobs_started_send_on_the_way` → function `notify_job_started()`
+  (migration `017_on_the_way_sms_on_job_started`) → Edge Function
+  `send-on-the-way-sms` (source in `supabase/functions/`).
+- Own dedicated Vault secret, `job_started_webhook_secret` (not shared
+  with the review-request trigger's secret — smaller blast radius if one
+  ever leaks). Get its value the same way, run yourself in the SQL Editor:
+  ```sql
+  select decrypted_secret from vault.decrypted_secrets where name = 'job_started_webhook_secret';
+  ```
+  Set it as the edge function's `JOB_STARTED_WEBHOOK_SECRET` secret.
+  `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` are shared
+  with `send-review-request` (same Twilio account and number).
+- **"Live Google Maps link" honestly means**: an interactive
+  `maps.google.com` URL to the job's address — the same URL `TechHome`'s
+  own Navigate button already uses — not real-time GPS tracking of the
+  tech. There's no location pipeline (`tech_locations` has no GPS source
+  feeding it), so this doesn't pretend to show where the tech actually is,
+  only where they're headed. A genuine live-tracking page would need a
+  GPS ingestion pipeline from the tech's phone plus a public tracking
+  page — a materially bigger feature than "send a text."
+- No client-visible confirmation that the text sent (unlike the deposit
+  flow, which shows the Stripe URL directly) — this fires from Postgres
+  via `pg_net`, fire-and-forget, so the browser never learns the outcome.
+  Check Edge Function logs (Supabase dashboard → Edge Functions →
+  send-on-the-way-sms → Logs) to confirm sends.
+
+**Message sent**: `"Hi {FirstName}, {TechFirstName} from {CompanyName} is
+on the way to {address}. {mapsLink}"`.
+
 ## Signup flow
 
 A new `auth.users` row has no `company_id` or `role` yet, so two RPCs bridge
