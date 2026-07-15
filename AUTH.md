@@ -196,6 +196,67 @@ for the owner to copy/open and share manually (read it over the phone,
 text it themselves). Wiring actual SMS delivery would reuse the Twilio
 account already connected for the receptionist.
 
+## Review-request SMS on job completion
+
+Real Twilio SMS, fired server-side the instant a job's status becomes
+`'done'` — not triggered by any client code, so it fires reliably
+regardless of which screen (or future path) completes the job. The demo's
+comment on `FEEDBACK` said this outright: *"In production this comes from
+the same review-request text the job completion already sends"* — this is
+that text.
+
+**Architecture** (source in `supabase/functions/send-review-request/`):
+- A Postgres trigger (`jobs_completed_send_review`, migration
+  `015_review_request_on_job_complete`) fires `after update on jobs`,
+  guarded by `new.status = 'done' and old.status is distinct from 'done'`
+  so it only fires on the transition into done, not on later edits to an
+  already-completed job.
+- The trigger function (`notify_job_completed`, `security definer` so it
+  can read the shared secret regardless of which role — owner or tech —
+  triggered the update) calls `net.http_post` (the `pg_net` extension) to
+  hit the `send-review-request` Edge Function, async so it doesn't block
+  the status-update write.
+- **Auth between the trigger and the function**: there's no Supabase user
+  session on a DB trigger, so a shared secret is used instead — generated
+  with `gen_random_bytes()` *inside* Postgres and stored in Supabase Vault
+  (`job_completed_webhook_secret`), rather than passed in as a literal
+  value. This matters: `apply_migration` calls persist their SQL text in
+  Supabase's migration history, so a hardcoded secret there would sit in
+  plaintext right next to the Vault entry meant to protect it. The trigger
+  reads it from `vault.decrypted_secrets` and sends it as `x-webhook-secret`;
+  the edge function checks it against its own `JOB_COMPLETED_WEBHOOK_SECRET`
+  secret. **To get the value for that edge function secret**, run this
+  yourself in the Supabase SQL Editor (deliberately not something I ran and
+  printed here — no reason to route a live secret through my output when
+  you can pull it directly):
+  ```sql
+  select decrypted_secret from vault.decrypted_secrets where name = 'job_completed_webhook_secret';
+  ```
+- The function looks up the job's customer + company, skips gracefully
+  (no SMS, no error) if there's no phone on file or `companies.google_review_link`
+  isn't set, normalizes the phone to E.164, and sends via Twilio's REST
+  API directly (`fetch` + Basic auth — no SDK needed).
+
+**Required Edge Function secrets** (Supabase dashboard → Edge Functions →
+Secrets, same no-CLI path as the Stripe secrets):
+- `JOB_COMPLETED_WEBHOOK_SECRET` — the value from the SQL query above.
+- `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` — from the Twilio console
+  (same account already set up for the AI receptionist).
+- `TWILIO_FROM_NUMBER` — the Twilio number already connected to Vapi, in
+  E.164 format (e.g. `+14035551234`). One number handles both inbound
+  voice and outbound SMS.
+
+**Required setup on the company itself**: `companies.google_review_link`
+starts `null` — there's no Settings screen yet to edit it through, so set
+it directly (Supabase dashboard → Table Editor → companies → edit the
+row), or give me the business's Google review link and I'll set it via a
+query. Get the link from Google Business Profile → "Ask for reviews" (a
+short `g.page/r/.../review` link) or a `search.google.com/local/writereview?placeid=...`
+URL for the business's Place ID.
+
+**Message sent**: `"Hi {FirstName}, thanks for choosing {CompanyName}! If
+you have a minute, a quick Google review helps us a lot: {link}"`.
+
 ## Signup flow
 
 A new `auth.users` row has no `company_id` or `role` yet, so two RPCs bridge

@@ -141,6 +141,7 @@ export type Database = {
           deposit_pct: number
           deposit_threshold: number
           emergency_multiplier: number
+          google_review_link: string | null
           hourly_rate: number
           id: string
           join_code: string
@@ -160,6 +161,7 @@ export type Database = {
           deposit_pct?: number
           deposit_threshold?: number
           emergency_multiplier?: number
+          google_review_link?: string | null
           hourly_rate?: number
           id?: string
           join_code: string
@@ -179,6 +181,7 @@ export type Database = {
           deposit_pct?: number
           deposit_threshold?: number
           emergency_multiplier?: number
+          google_review_link?: string | null
           hourly_rate?: number
           id?: string
           join_code?: string
