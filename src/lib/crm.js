@@ -39,3 +39,32 @@ export async function createContact({ name, phone, email, address }) {
   if (error) throw error
   return data
 }
+
+export async function updateContactTags(customerId, tags) {
+  const { error } = await supabase.from('customers').update({ tags }).eq('id', customerId)
+  if (error) throw error
+}
+
+// Append-only interaction timeline (customer_interactions has no update
+// RLS policy, by design - see migration 019). created_by/company_id are
+// both DB-side defaults (auth.uid() / current_company_id()), not supplied
+// here, matching the rest of this app's inserts.
+export async function listInteractions(customerId) {
+  const { data, error } = await supabase
+    .from('customer_interactions')
+    .select('*, created_by:profiles(name)')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function addInteraction({ customerId, type, body }) {
+  const { data, error } = await supabase
+    .from('customer_interactions')
+    .insert({ customer_id: customerId, type, body })
+    .select('*, created_by:profiles(name)')
+    .single()
+  if (error) throw error
+  return data
+}

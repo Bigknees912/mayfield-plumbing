@@ -195,6 +195,58 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_interactions: {
+        Row: {
+          body: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          type: string
+        }
+        Insert: {
+          body: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          type?: string
+        }
+        Update: {
+          body?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_interactions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_interactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_interactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -207,6 +259,7 @@ export type Database = {
           pipeline_stage: string
           referral_code: string | null
           referred_by: string | null
+          tags: string[]
         }
         Insert: {
           address?: string | null
@@ -219,6 +272,7 @@ export type Database = {
           pipeline_stage?: string
           referral_code?: string | null
           referred_by?: string | null
+          tags?: string[]
         }
         Update: {
           address?: string | null
@@ -231,6 +285,7 @@ export type Database = {
           pipeline_stage?: string
           referral_code?: string | null
           referred_by?: string | null
+          tags?: string[]
         }
         Relationships: [
           {
@@ -877,6 +932,7 @@ export type Database = {
           deposit_pct: number
           deposit_threshold: number
           emergency_multiplier: number
+          google_review_link: string | null
           hourly_rate: number
           id: string
           join_code: string
@@ -901,6 +957,7 @@ export type Database = {
           deposit_pct: number
           deposit_threshold: number
           emergency_multiplier: number
+          google_review_link: string | null
           hourly_rate: number
           id: string
           join_code: string

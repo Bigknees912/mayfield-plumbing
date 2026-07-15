@@ -7,6 +7,7 @@ import { SectionLabel, LoadingState, ErrorState, ErrorBanner, initialsOf } from 
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
 import { useAsyncData } from './useAsyncData'
 import { useTableRealtime } from './useTableRealtime'
+import ContactDetailModal from './ContactDetailModal'
 
 // A GoHighLevel-style pipeline: every contact is a customers row with an
 // explicit, manually-managed pipeline_stage (migration
@@ -23,6 +24,7 @@ export default function ClientsPage({ company }) {
   const [contacts, setContacts] = useState([])
   const [addOpen, setAddOpen] = useState(false)
   const [activeId, setActiveId] = useState(null)
+  const [detailForId, setDetailForId] = useState(null)
   const [moveError, setMoveError] = useState('')
 
   async function load() {
@@ -80,10 +82,19 @@ export default function ClientsPage({ company }) {
     }
   }
 
+  // Patches the card's tags immediately from ContactDetailModal - avoids a
+  // full reload round-trip for something the realtime subscription would
+  // also eventually deliver, same optimistic-then-confirmed spirit as drag.
+  function handleTagsChanged(contactId, tags) {
+    setContacts((cs) => cs.map((c) => (c.id === contactId ? { ...c, tags } : c)))
+  }
+
   if (loading) return <LoadingState />
   if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
 
   const activeContact = contacts.find((c) => c.id === activeId)
+  const detailContact = contacts.find((c) => c.id === detailForId)
+  const allTags = [...new Set(contacts.flatMap((c) => c.tags || []))].sort()
 
   return (
     <>
@@ -103,6 +114,7 @@ export default function ClientsPage({ company }) {
               key={stage.key}
               stage={stage}
               contacts={contacts.filter((c) => c.pipeline_stage === stage.key)}
+              onOpen={(id) => setDetailForId(id)}
             />
           ))}
         </div>
@@ -116,11 +128,19 @@ export default function ClientsPage({ company }) {
       </DndContext>
 
       {addOpen && <AddContactModal onClose={() => setAddOpen(false)} onCreated={handleContactCreated} />}
+      {detailContact && (
+        <ContactDetailModal
+          contact={detailContact}
+          allTags={allTags}
+          onClose={() => setDetailForId(null)}
+          onTagsChanged={handleTagsChanged}
+        />
+      )}
     </>
   )
 }
 
-function StageColumn({ stage, contacts }) {
+function StageColumn({ stage, contacts, onOpen }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.key })
   return (
     <div
@@ -132,7 +152,7 @@ function StageColumn({ stage, contacts }) {
         <span style={{ fontSize: 11, fontWeight: 600, color: LIGHT.sub, background: LIGHT.card, borderRadius: 10, padding: '1px 7px' }}>{contacts.length}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {contacts.map((c) => <ContactCard key={c.id} contact={c} />)}
+        {contacts.map((c) => <ContactCard key={c.id} contact={c} onOpen={onOpen} />)}
         {contacts.length === 0 && <div style={{ fontSize: 11, color: LIGHT.sub, textAlign: 'center', padding: '18px 0' }}>Drop here</div>}
       </div>
     </div>
@@ -140,6 +160,7 @@ function StageColumn({ stage, contacts }) {
 }
 
 function ContactCardContent({ contact }) {
+  const tags = contact.tags || []
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: contact.phone || contact.email ? 6 : 0 }}>
@@ -154,21 +175,30 @@ function ContactCardContent({ contact }) {
         </div>
       )}
       {contact.email && (
-        <div style={{ fontSize: 10.5, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ fontSize: 10.5, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4, marginBottom: tags.length > 0 ? 4 : 0 }}>
           <Mail size={10} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contact.email}</span>
+        </div>
+      )}
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+          {tags.slice(0, 2).map((t) => (
+            <span key={t} style={{ fontSize: 9.5, fontWeight: 600, color: LIGHT.accent, background: LIGHT.accentSoft, borderRadius: 10, padding: '2px 6px' }}>{t}</span>
+          ))}
+          {tags.length > 2 && <span style={{ fontSize: 9.5, color: LIGHT.sub }}>+{tags.length - 2}</span>}
         </div>
       )}
     </>
   )
 }
 
-function ContactCard({ contact }) {
+function ContactCard({ contact, onOpen }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: contact.id })
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      onClick={() => onOpen(contact.id)}
       style={{
         background: LIGHT.card,
         borderRadius: 12,

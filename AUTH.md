@@ -153,6 +153,43 @@ Realtime: `customers` was added to the `supabase_realtime` publication
 reuse it — `useJobsRealtime` itself is now a two-line wrapper around it,
 kept so `OwnerHome`/`JobsBoard`'s existing imports didn't need to change.
 
+### Tags and the interaction timeline
+
+Clicking a card opens `src/dashboard/ContactDetailModal.jsx`, which adds
+two things per contact, from migration `019_contact_tags_and_interactions`:
+
+- **`customers.tags text[]`** — plain array, not a separate tags table +
+  join. The examples given ("repeat customer", "referred by Sarah") are
+  ad-hoc, often contact-specific text, not a controlled vocabulary worth
+  normalizing. The modal still offers lightweight autocomplete: `allTags`
+  (every distinct tag already used across the company) is computed
+  client-side in `ClientsPage.jsx` from the contacts already loaded — no
+  extra query — and shown as click-to-add suggestions. Saved via
+  `updateContactTags`, optimistic with revert-on-failure, and patches the
+  board's local state directly (`onTagsChanged`) rather than waiting on a
+  full reload or the realtime round-trip.
+- **`customer_interactions` table** — the timeline. Deliberately *not*
+  the same table as `calls` (that's the AI receptionist's automated Vapi
+  call log — vapi_call_id, quote_low/high — a different concern from a
+  person typing "called to follow up, left voicemail"). `type` is
+  `'note'` or `'call'`, picked via a toggle in the composer.
+  `company_id`/`created_by` are both DB-side defaults
+  (`current_company_id()` / `auth.uid()`), same convention as everywhere
+  else — never supplied by the client.
+- **Append-only by design**: there's no UPDATE policy on
+  `customer_interactions`. It's meant to read like an audit trail —
+  corrections are new entries, not edits to history. A DELETE policy
+  exists (creator or owner) for cleaning up a genuine mistake, but no UI
+  button calls it yet since removal wasn't asked for; it's there at the
+  RLS layer if it's ever needed directly.
+- **Card-vs-drag click handling**: `ContactCard` has both `@dnd-kit`
+  drag listeners *and* an `onClick` to open the detail modal on the same
+  element. This works because of the sensors' `activationConstraint`
+  (`distance`/`delay`) — a plain tap that doesn't cross that threshold
+  never becomes a drag, so the click fires normally. If drag-vs-click
+  ever misbehaves after real testing, that constraint tuning is the first
+  place to look.
+
 ### Loading and error handling
 
 Every screen follows the same pattern via `src/dashboard/useAsyncData.js`:
