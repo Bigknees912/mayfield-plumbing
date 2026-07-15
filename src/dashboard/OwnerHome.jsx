@@ -1,43 +1,40 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { PhoneIncoming, CalendarCheck, TrendingUp, AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react'
 import { getDashboardStats, listOpenFeedback } from '../lib/dashboard'
 import { listRecentJobs } from '../lib/jobs'
 import { LIGHT } from '../theme'
-import { StatCard, SectionLabel, Badge, EmptyState, money, STATUS_META, URGENCY_STYLE } from './ui'
+import { StatCard, SectionLabel, Badge, LoadingState, ErrorState, ErrorBanner, EmptyState, money, STATUS_META, URGENCY_STYLE } from './ui'
 import { useJobsRealtime } from './useJobsRealtime'
+import { useAsyncData } from './useAsyncData'
 
 // Ported from app-demo.jsx's OwnerHome. Weather-alert banner dropped - it
 // read a hardcoded Calgary forecast with no real data source. "Recovered"
 // stat (calls saved from voicemail) dropped for the same reason; replaced
 // with "Completed Today", which is a real, queryable number.
 export default function OwnerHome({ businessProfile }) {
-  const [stats, setStats] = useState(null)
-  const [jobs, setJobs] = useState([])
-  const [feedback, setFeedback] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [data, setData] = useState({ stats: null, jobs: [], feedback: [] })
 
-  async function reload() {
-    const [s, j, f] = await Promise.all([getDashboardStats(), listRecentJobs(6), listOpenFeedback()])
-    setStats(s)
-    setJobs(j)
-    setFeedback(f)
+  async function load() {
+    const [stats, jobs, feedback] = await Promise.all([getDashboardStats(), listRecentJobs(6), listOpenFeedback()])
+    setData({ stats, jobs, feedback })
   }
 
-  useEffect(() => {
-    setLoading(true)
-    reload().catch((err) => setError(err.message)).finally(() => setLoading(false))
-  }, [])
+  const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [])
 
   // Picks up a job Alex books over the phone (or any other change) live,
-  // without a manual refresh.
-  useJobsRealtime(businessProfile?.id, () => { reload().catch((err) => setError(err.message)) })
+  // without a manual refresh. A failed background refresh here shows a
+  // dismissible banner rather than replacing the whole screen - the
+  // stats/jobs already on screen stay visible and correct.
+  useJobsRealtime(businessProfile?.id, reload)
 
-  if (loading) return <EmptyState>Loading…</EmptyState>
-  if (error) return <EmptyState>{error}</EmptyState>
+  if (loading) return <LoadingState />
+  if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
+
+  const { stats, jobs, feedback } = data
 
   return (
     <>
+      <ErrorBanner message={error} onRetry={reload} />
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: LIGHT.successSoft, color: LIGHT.success, borderRadius: 20, padding: '4px 10px', fontSize: 10.5, fontWeight: 700, marginBottom: 14 }}>
         <ShieldCheck size={12} /> Licensed &amp; Insured — Alberta
       </div>

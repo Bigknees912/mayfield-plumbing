@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Home, KanbanSquare, Calendar, LogOut } from 'lucide-react'
 import { LIGHT } from '../theme'
 import { GlobalStyle } from '../auth/ui'
+import { ErrorBanner } from './ui'
 import OwnerHome from './OwnerHome'
 import JobsBoard from './JobsBoard'
 import CalendarPage from './CalendarPage'
@@ -23,9 +24,25 @@ const TECH_TABS = [
 // part of this pass.
 export default function AppShell({ session, profile, onSignOut }) {
   const [tab, setTab] = useState('home')
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
   const isOwner = profile.role === 'owner'
   const tabs = isOwner ? OWNER_TABS : TECH_TABS
   const company = profile.companies
+
+  async function handleSignOut() {
+    setSigningOut(true)
+    setSignOutError('')
+    try {
+      await onSignOut()
+    } catch (err) {
+      setSignOutError(err.message || String(err))
+      setSigningOut(false)
+    }
+    // No `finally` resetting signingOut on success: onAuthStateChange
+    // unmounts this whole screen once the session clears, so there's
+    // nothing left here to reset.
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: LIGHT.bg, paddingBottom: 76 }}>
@@ -36,10 +53,11 @@ export default function AppShell({ session, profile, onSignOut }) {
             <div style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink }}>{company?.name || 'Mayfield'}</div>
             <div style={{ fontSize: 12, color: LIGHT.sub }}>{profile.name} · {isOwner ? 'Owner' : 'Technician'}</div>
           </div>
-          <button className="tap" onClick={onSignOut} style={{ width: 36, height: 36, borderRadius: 18, background: LIGHT.card, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
+          <button className="tap" onClick={handleSignOut} disabled={signingOut} style={{ width: 36, height: 36, borderRadius: 18, background: LIGHT.card, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
             <LogOut size={16} color={LIGHT.ink} />
           </button>
         </div>
+        <ErrorBanner message={signOutError} onDismiss={() => setSignOutError('')} />
 
         {tab === 'home' && isOwner && <OwnerHome businessProfile={company} />}
         {tab === 'home' && !isOwner && <TechHome techId={session.user.id} />}

@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { LIGHT } from '../theme'
 
 export function money(n) {
@@ -44,4 +45,43 @@ export function StatCard({ icon: Icon, label, value, sub, subColor }) {
 
 export function EmptyState({ children }) {
   return <div style={{ fontSize: 13, color: LIGHT.sub, textAlign: 'center', padding: '30px 0' }}>{children}</div>
+}
+
+export function LoadingState({ children = 'Loading…' }) {
+  return <div style={{ fontSize: 13, color: LIGHT.sub, textAlign: 'center', padding: '30px 0' }}>{children}</div>
+}
+
+// Full-page replacement for a failed first load - distinct from EmptyState
+// (which means "the request worked, there's just nothing to show") so a
+// broken request never looks the same as a normal empty list. Always
+// offers a way out via onRetry rather than leaving a dead end.
+export function ErrorState({ message, onRetry }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '28px 16px', background: LIGHT.alertSoft, borderRadius: 16 }}>
+      <div style={{ fontSize: 13, color: LIGHT.alert, marginBottom: onRetry ? 14 : 0 }}>{message}</div>
+      {onRetry && (
+        <button className="tap" onClick={onRetry} style={{ fontSize: 12.5, fontWeight: 600, color: '#fff', background: LIGHT.alert, borderRadius: 8, padding: '8px 18px' }}>
+          Try Again
+        </button>
+      )}
+    </div>
+  )
+}
+
+// Non-blocking version for when a page already has good data on screen
+// (e.g. a background refresh failed) - shown as a dismissible banner
+// instead of replacing the content underneath it. Also doubles as the
+// error display for a failed mutation (assign, clock in/out, etc.) where
+// disabling/re-enabling the specific control is handled by the caller.
+export function ErrorBanner({ message, onRetry, onDismiss }) {
+  if (!message) return null
+  return (
+    <div style={{ background: LIGHT.alertSoft, color: LIGHT.alert, borderRadius: 10, padding: '10px 12px', fontSize: 12, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <span style={{ flex: 1 }}>{message}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        {onRetry && <button className="tap" onClick={onRetry} style={{ fontSize: 11.5, fontWeight: 700, color: LIGHT.alert }}>Retry</button>}
+        {onDismiss && <button className="tap" onClick={onDismiss}><X size={14} color={LIGHT.alert} /></button>}
+      </div>
+    </div>
+  )
 }

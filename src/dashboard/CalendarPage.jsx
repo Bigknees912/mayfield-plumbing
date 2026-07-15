@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { listJobsInRange } from '../lib/jobs'
 import { LIGHT } from '../theme'
-import { SectionLabel, Badge, EmptyState, STATUS_META } from './ui'
+import { SectionLabel, Badge, LoadingState, ErrorState, EmptyState, STATUS_META } from './ui'
+import { useAsyncData } from './useAsyncData'
 
 function toISO(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
@@ -19,20 +20,18 @@ export default function CalendarPage({ myTechId }) {
   const [viewMonth, setViewMonth] = useState(() => { const d = new Date(); d.setDate(1); return d })
   const [selectedDate, setSelectedDate] = useState(todayISO())
   const [jobs, setJobs] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
 
-  useEffect(() => {
-    const y = viewMonth.getFullYear()
-    const m = viewMonth.getMonth()
-    const start = toISO(y, m, 1)
-    const end = toISO(m === 11 ? y + 1 : y, m === 11 ? 0 : m + 1, 1)
-    setLoading(true)
-    listJobsInRange(start, end, myTechId ? { techId: myTechId } : {})
-      .then(setJobs)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [viewMonth, myTechId])
+  const y = viewMonth.getFullYear()
+  const m = viewMonth.getMonth()
+  const rangeStart = toISO(y, m, 1)
+  const rangeEnd = toISO(m === 11 ? y + 1 : y, m === 11 ? 0 : m + 1, 1)
+
+  async function load() {
+    const data = await listJobsInRange(rangeStart, rangeEnd, myTechId ? { techId: myTechId } : {})
+    setJobs(data)
+  }
+
+  const { loading, error, reload } = useAsyncData(load, [rangeStart, rangeEnd, myTechId])
 
   const jobCountByDate = useMemo(() => {
     const map = {}
@@ -41,14 +40,13 @@ export default function CalendarPage({ myTechId }) {
   }, [jobs])
 
   const gridCells = useMemo(() => {
-    const y = viewMonth.getFullYear(), m = viewMonth.getMonth()
     const firstDow = new Date(y, m, 1).getDay()
     const daysInMonth = new Date(y, m + 1, 0).getDate()
     const cells = []
     for (let i = 0; i < firstDow; i++) cells.push(null)
     for (let d = 1; d <= daysInMonth; d++) cells.push(toISO(y, m, d))
     return cells
-  }, [viewMonth])
+  }, [y, m])
 
   function changeMonth(delta) {
     setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + delta, 1))
@@ -58,8 +56,10 @@ export default function CalendarPage({ myTechId }) {
     .filter((j) => j.scheduled_date === selectedDate)
     .sort((a, b) => (a.scheduled_window || '').localeCompare(b.scheduled_window || ''))
 
-  if (error) return <EmptyState>{error}</EmptyState>
-
+  // The month grid + nav always render, even on a failed fetch - only the
+  // day list below it is replaced by the error, so the user can still
+  // change months (which retries with a different range) or hit Retry
+  // instead of being stuck looking at a blank page.
   return (
     <>
       <SectionLabel>Calendar</SectionLabel>
@@ -93,9 +93,9 @@ export default function CalendarPage({ myTechId }) {
       </div>
 
       <SectionLabel>{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}</SectionLabel>
-      {loading ? (
-        <EmptyState>Loading…</EmptyState>
-      ) : (
+      {loading && <LoadingState />}
+      {error && <ErrorState message={error} onRetry={reload} />}
+      {!loading && !error && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {dayJobs.map((j) => {
             const s = STATUS_META[j.status]

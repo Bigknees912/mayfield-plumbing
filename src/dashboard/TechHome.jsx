@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Clock, CheckCircle2, Clock3, Navigation, Play, MapPin, ChevronRight, X, Phone, Users, DollarSign } from 'lucide-react'
 import { listJobsForTechToday, advanceJobStatus, updateJobNotes } from '../lib/jobs'
 import { getOpenTimeEntry, clockIn, clockOut } from '../lib/timeEntries'
 import { LIGHT } from '../theme'
-import { SectionLabel, Badge, EmptyState, money, URGENCY_STYLE } from './ui'
-import { FieldLabel } from '../auth/ui'
+import { SectionLabel, Badge, LoadingState, ErrorState, ErrorBanner, EmptyState, money, URGENCY_STYLE } from './ui'
+import { FieldLabel, ErrorText } from '../auth/ui'
+import { useAsyncData } from './useAsyncData'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -12,36 +13,51 @@ function todayISO() {
 
 // Ported from app-demo.jsx's TechHome. The AI job-report generation (a raw
 // client-side call to the Anthropic API with no API key/backend proxy) and
-// the "on the way" SMS preview (no real SMS backend) are both dropped -
-// Mark Complete now just saves the tech's notes directly to jobs.notes.
+// the "on the way" SMS preview (no real SMS backend, that's now the
+// server-side jobs_started_send_on_the_way trigger instead) are both
+// dropped - Mark Complete now just saves the tech's notes to jobs.notes.
 export default function TechHome({ techId }) {
   const [jobs, setJobs] = useState([])
   const [openEntry, setOpenEntry] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [detailFor, setDetailFor] = useState(null)
   const [reportFor, setReportFor] = useState(null)
+  const [clockPending, setClockPending] = useState(false)
+  const [startingJobId, setStartingJobId] = useState(null)
+  const [actionError, setActionError] = useState('')
 
-  async function reload() {
+  async function load() {
     const [j, entry] = await Promise.all([listJobsForTechToday(techId, todayISO()), getOpenTimeEntry(techId)])
     setJobs(j)
     setOpenEntry(entry)
   }
 
-  useEffect(() => {
-    setLoading(true)
-    reload().catch((err) => setError(err.message)).finally(() => setLoading(false))
-  }, [techId])
+  const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [techId])
 
   async function toggleClock() {
-    if (openEntry) await clockOut(openEntry.id)
-    else await clockIn(techId)
-    await reload()
+    setClockPending(true)
+    setActionError('')
+    try {
+      if (openEntry) await clockOut(openEntry.id)
+      else await clockIn(techId)
+      await reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setClockPending(false)
+    }
   }
 
   async function handleStart(job) {
-    await advanceJobStatus(job.id, 'in_progress', techId)
-    await reload()
+    setStartingJobId(job.id)
+    setActionError('')
+    try {
+      await advanceJobStatus(job.id, 'in_progress', techId)
+      await reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setStartingJobId(null)
+    }
   }
 
   async function handleComplete(jobId, notes) {
@@ -50,14 +66,17 @@ export default function TechHome({ techId }) {
     await reload()
   }
 
-  if (loading) return <EmptyState>Loading…</EmptyState>
-  if (error) return <EmptyState>{error}</EmptyState>
+  if (loading) return <LoadingState />
+  if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
 
   const completedToday = jobs.filter((j) => j.status === 'done').length
   const remaining = jobs.filter((j) => j.status !== 'done').length
 
   return (
     <>
+      <ErrorBanner message={error && hasLoadedOnce ? error : ''} onRetry={reload} />
+      <ErrorBanner message={actionError} onDismiss={() => setActionError('')} />
+
       <div style={{ background: LIGHT.card, borderRadius: 16, padding: 14, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 36, height: 36, borderRadius: 10, background: openEntry ? LIGHT.successSoft : LIGHT.border, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Clock size={16} color={openEntry ? LIGHT.success : LIGHT.sub} />
@@ -68,8 +87,8 @@ export default function TechHome({ techId }) {
             {openEntry ? `Clocked in at ${new Date(openEntry.clock_in).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })}` : 'Not clocked in'}
           </div>
         </div>
-        <button className="tap" onClick={toggleClock} style={{ fontSize: 12, fontWeight: 600, color: openEntry ? LIGHT.alert : LIGHT.success, border: `1px solid ${openEntry ? LIGHT.alertSoft : LIGHT.successSoft}`, borderRadius: 8, padding: '7px 12px' }}>
-          {openEntry ? 'Clock Out' : 'Clock In'}
+        <button className="tap" onClick={toggleClock} disabled={clockPending} style={{ fontSize: 12, fontWeight: 600, color: openEntry ? LIGHT.alert : LIGHT.success, border: `1px solid ${openEntry ? LIGHT.alertSoft : LIGHT.successSoft}`, borderRadius: 8, padding: '7px 12px' }}>
+          {clockPending ? 'Working…' : openEntry ? 'Clock Out' : 'Clock In'}
         </button>
       </div>
 
@@ -84,6 +103,7 @@ export default function TechHome({ techId }) {
           const u = URGENCY_STYLE[job.urgency]
           const isDone = job.status === 'done'
           const isInProgress = job.status === 'in_progress'
+          const isStarting = startingJobId === job.id
           return (
             <div key={job.id} style={{ background: LIGHT.card, borderRadius: 18, padding: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', opacity: isDone ? 0.55 : 1 }}>
               <button className="tap" onClick={() => setDetailFor(job)} style={{ display: 'block', width: '100%', textAlign: 'left' }}>
@@ -96,7 +116,11 @@ export default function TechHome({ techId }) {
               </button>
               <div style={{ display: 'flex', gap: 8 }}>
                 <a href={`https://maps.google.com/?q=${encodeURIComponent(job.address)}`} target="_blank" rel="noopener noreferrer" style={{ flex: 1, textAlign: 'center', border: `1px solid ${LIGHT.border}`, borderRadius: 10, padding: '10px 0', fontSize: 13, color: LIGHT.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}><Navigation size={13} /> Navigate</a>
-                {!isDone && !isInProgress && <button className="tap" onClick={() => handleStart(job)} style={{ flex: 1, textAlign: 'center', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 600, background: LIGHT.infoSoft, color: LIGHT.info, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Play size={13} /> Start Job</button>}
+                {!isDone && !isInProgress && (
+                  <button className="tap" onClick={() => handleStart(job)} disabled={isStarting} style={{ flex: 1, textAlign: 'center', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 600, background: LIGHT.infoSoft, color: LIGHT.info, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Play size={13} /> {isStarting ? 'Starting…' : 'Start Job'}
+                  </button>
+                )}
                 {isInProgress && <button className="tap" onClick={() => setReportFor(job)} style={{ flex: 1, textAlign: 'center', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 600, background: LIGHT.ink, color: LIGHT.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><CheckCircle2 size={13} /> Mark Complete</button>}
                 {isDone && <div style={{ flex: 1, textAlign: 'center', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 600, background: LIGHT.successSoft, color: LIGHT.success, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><CheckCircle2 size={13} /> Done</div>}
               </div>
@@ -140,13 +164,23 @@ function DetailRow({ icon: Icon, label, value }) {
 
 function JobDetailModal({ job, onClose, onSaveNotes }) {
   const [notes, setNotes] = useState(job.notes || '')
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
   const u = URGENCY_STYLE[job.urgency]
 
   async function save() {
-    await onSaveNotes(notes)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 1500)
+    setSaving(true)
+    setError('')
+    try {
+      await onSaveNotes(notes)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 1500)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -185,8 +219,9 @@ function JobDetailModal({ job, onClose, onSaveNotes }) {
           rows={4}
           style={{ width: '100%', background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 13, padding: 12, color: LIGHT.ink, marginBottom: 10, resize: 'none' }}
         />
-        <button className="tap" onClick={save} style={{ width: '100%', textAlign: 'center', background: LIGHT.ink, color: LIGHT.bg, border: 'none', borderRadius: 10, padding: '11px 0', fontSize: 13, fontWeight: 600 }}>
-          {saved ? 'Saved' : 'Save Notes'}
+        <ErrorText>{error}</ErrorText>
+        <button className="tap" onClick={save} disabled={saving} style={{ width: '100%', textAlign: 'center', background: LIGHT.ink, color: LIGHT.bg, border: 'none', borderRadius: 10, padding: '11px 0', fontSize: 13, fontWeight: 600 }}>
+          {saving ? 'Saving…' : saved ? 'Saved' : 'Save Notes'}
         </button>
       </div>
     </div>
@@ -196,11 +231,15 @@ function JobDetailModal({ job, onClose, onSaveNotes }) {
 function CompleteJobModal({ job, onClose, onComplete }) {
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   async function submit() {
     setSaving(true)
+    setError('')
     try {
       await onComplete(notes)
+    } catch (err) {
+      setError(err.message)
     } finally {
       setSaving(false)
     }
@@ -215,8 +254,9 @@ function CompleteJobModal({ job, onClose, onComplete }) {
           value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder="e.g. old wax ring failed, replaced ring + bolts, tested flush 3x no leak"
           rows={4}
-          style={{ width: '100%', background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 13, padding: 12, color: LIGHT.ink, marginBottom: 14, resize: 'none' }}
+          style={{ width: '100%', background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 13, padding: 12, color: LIGHT.ink, marginBottom: 10, resize: 'none' }}
         />
+        <ErrorText>{error}</ErrorText>
         <button className="tap" onClick={submit} disabled={saving} style={{ width: '100%', textAlign: 'center', background: LIGHT.success, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 0', fontSize: 13.5, fontWeight: 600 }}>
           {saving ? 'Saving…' : 'Confirm & Complete Job'}
         </button>

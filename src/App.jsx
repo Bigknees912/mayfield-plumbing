@@ -8,31 +8,56 @@ import RoleChoiceScreen from './auth/RoleChoiceScreen'
 import OwnerOnboardingScreen from './auth/OwnerOnboardingScreen'
 import EmployeeJoinScreen from './auth/EmployeeJoinScreen'
 import { AuthShell, LIGHT } from './auth/ui'
+import { ErrorState, ErrorBanner, LoadingState } from './dashboard/ui'
 import AppShell from './dashboard/AppShell'
 
 // State machine (see AUTH.md "Frontend implementation" for the reasoning):
 //   session === undefined         -> still checking for an existing session
+//   sessionError set              -> that check failed outright (network, etc.)
 //   session === null              -> signed out: render pre-auth screens
-//   session set, profile undefined -> fetching the profile row
+//   session set, profile undefined, no profileError -> fetching the profile row
+//   profileError set              -> the fetch itself failed - NOT the same as
+//                                     "confirmed no profile", so this must not
+//                                     fall through to the signup flow
 //   session set, profile null      -> authenticated but no company yet:
 //                                      render post-auth setup screens
 //   session set, profile set       -> fully signed in
 export default function App() {
   const [session, setSession] = useState(undefined)
+  const [sessionError, setSessionError] = useState('')
   const [profile, setProfile] = useState(undefined)
+  const [profileError, setProfileError] = useState('')
+  const [refreshError, setRefreshError] = useState('')
   const [preAuthScreen, setPreAuthScreen] = useState('login') // login | signup | check-email
   const [pendingEmail, setPendingEmail] = useState('')
   const [postAuthScreen, setPostAuthScreen] = useState('role-choice') // role-choice | owner-onboarding | employee-join
 
+  function loadSession() {
+    setSessionError('')
+    supabase.auth.getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch((err) => setSessionError(err.message || String(err)))
+  }
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    loadSession()
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession)
       setPostAuthScreen('role-choice')
       if (!newSession) setPreAuthScreen('login')
     })
     return () => listener.subscription.unsubscribe()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  function loadProfile() {
+    if (!session) return
+    setProfileError('')
+    setProfile(undefined)
+    fetchProfile(session.user.id)
+      .then(setProfile)
+      .catch((err) => setProfileError(err.message || String(err)))
+  }
 
   useEffect(() => {
     if (session === undefined) return
@@ -40,22 +65,36 @@ export default function App() {
       setProfile(null)
       return
     }
-    setProfile(undefined)
-    fetchProfile(session.user.id)
-      .then(setProfile)
-      .catch((err) => {
-        console.error('Failed to load profile:', err)
-        setProfile(null)
-      })
+    loadProfile()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
 
   function refreshProfile() {
     if (!session) return
-    fetchProfile(session.user.id).then(setProfile).catch(console.error)
+    setRefreshError('')
+    fetchProfile(session.user.id)
+      .then(setProfile)
+      .catch((err) => setRefreshError(err.message || String(err)))
   }
 
-  if (session === undefined || (session && profile === undefined)) {
+  if (sessionError) {
+    return (
+      <AuthShell>
+        <ErrorState message={`Couldn't check your session: ${sessionError}`} onRetry={loadSession} />
+      </AuthShell>
+    )
+  }
+
+  if (session === undefined || (session && profile === undefined && !profileError)) {
     return <LoadingScreen />
+  }
+
+  if (session && profileError) {
+    return (
+      <AuthShell>
+        <ErrorState message={`Couldn't load your account: ${profileError}`} onRetry={loadProfile} />
+      </AuthShell>
+    )
   }
 
   if (!session) {
@@ -77,18 +116,33 @@ export default function App() {
   }
 
   if (!profile) {
+    let screen
     if (postAuthScreen === 'owner-onboarding') {
-      return <OwnerOnboardingScreen onBack={() => setPostAuthScreen('role-choice')} onDone={refreshProfile} />
-    }
-    if (postAuthScreen === 'employee-join') {
-      return <EmployeeJoinScreen onBack={() => setPostAuthScreen('role-choice')} onDone={refreshProfile} />
+      screen = <OwnerOnboardingScreen onBack={() => setPostAuthScreen('role-choice')} onDone={refreshProfile} />
+    } else if (postAuthScreen === 'employee-join') {
+      screen = <EmployeeJoinScreen onBack={() => setPostAuthScreen('role-choice')} onDone={refreshProfile} />
+    } else {
+      screen = (
+        <RoleChoiceScreen
+          userEmail={session.user.email}
+          onPickOwner={() => setPostAuthScreen('owner-onboarding')}
+          onPickEmployee={() => setPostAuthScreen('employee-join')}
+        />
+      )
     }
     return (
-      <RoleChoiceScreen
-        userEmail={session.user.email}
-        onPickOwner={() => setPostAuthScreen('owner-onboarding')}
-        onPickEmployee={() => setPostAuthScreen('employee-join')}
-      />
+      <>
+        {refreshError && (
+          <div style={{ position: 'fixed', top: 12, left: 12, right: 12, zIndex: 100, maxWidth: 380, margin: '0 auto' }}>
+            <ErrorBanner
+              message={`That worked, but couldn't finish signing you in: ${refreshError}`}
+              onRetry={refreshProfile}
+              onDismiss={() => setRefreshError('')}
+            />
+          </div>
+        )}
+        {screen}
+      </>
     )
   }
 
@@ -98,7 +152,9 @@ export default function App() {
 function LoadingScreen() {
   return (
     <AuthShell>
-      <div style={{ textAlign: 'center', color: LIGHT.sub, fontSize: 14, paddingTop: 60 }}>Loading…</div>
+      <div style={{ paddingTop: 60 }}>
+        <LoadingState />
+      </div>
     </AuthShell>
   )
 }

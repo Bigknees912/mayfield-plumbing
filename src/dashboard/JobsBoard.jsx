@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { CheckCircle2, DollarSign, Plus, X, Route, Copy, ExternalLink } from 'lucide-react'
 import { listJobs, listJobTypes, listTeamTechs, listTechLocationsById, assignJob, findOrCreateCustomer, createJob, distanceKm } from '../lib/jobs'
 import { createDepositCheckout } from '../lib/deposits'
 import { LIGHT } from '../theme'
-import { SectionLabel, Badge, EmptyState, money, initialsOf, STATUS_META } from './ui'
+import { SectionLabel, Badge, LoadingState, ErrorState, ErrorBanner, EmptyState, money, initialsOf, STATUS_META } from './ui'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
 import { useJobsRealtime } from './useJobsRealtime'
+import { useAsyncData } from './useAsyncData'
 
 const COLUMNS = ['unassigned', 'assigned', 'in_progress', 'done']
 
@@ -22,15 +23,14 @@ export default function JobsBoard({ company }) {
   const [techs, setTechs] = useState([])
   const [techLocations, setTechLocations] = useState({})
   const [jobTypes, setJobTypes] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [pickerFor, setPickerFor] = useState(null)
   const [newJobOpen, setNewJobOpen] = useState(false)
+  const [assigningJobId, setAssigningJobId] = useState(null)
   const [sendingDepositId, setSendingDepositId] = useState(null)
-  const [depositError, setDepositError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [depositLink, setDepositLink] = useState(null)
 
-  async function reload() {
+  async function load() {
     const [j, t, locs, jt] = await Promise.all([listJobs(), listTeamTechs(), listTechLocationsById(), listJobTypes()])
     setJobs(j)
     setTechs(t)
@@ -38,37 +38,55 @@ export default function JobsBoard({ company }) {
     setJobTypes(jt)
   }
 
-  useEffect(() => {
-    setLoading(true)
-    reload().catch((err) => setError(err.message)).finally(() => setLoading(false))
-  }, [])
+  const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [])
 
   // Picks up a job Alex books over the phone (or any other change) live,
   // without a manual refresh.
-  useJobsRealtime(company?.id, () => { reload().catch((err) => setError(err.message)) })
+  useJobsRealtime(company?.id, reload)
 
   async function handleAssign(jobId, techId, currentStatus) {
-    await assignJob(jobId, techId, currentStatus)
-    setPickerFor(null)
-    await reload()
+    setAssigningJobId(jobId)
+    setActionError('')
+    try {
+      await assignJob(jobId, techId, currentStatus)
+      setPickerFor(null)
+      await reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setAssigningJobId(null)
+    }
+  }
+
+  async function handleJobCreated() {
+    // The job was already created successfully at this point - close the
+    // modal regardless, and route a refresh failure to the board's own
+    // error banner rather than the modal's (which would unmount the
+    // instant we close it, silently swallowing the error).
+    setNewJobOpen(false)
+    try {
+      await reload()
+    } catch (err) {
+      setActionError(err.message)
+    }
   }
 
   async function handleSendDeposit(jobId) {
     setSendingDepositId(jobId)
-    setDepositError('')
+    setActionError('')
     try {
       const result = await createDepositCheckout(jobId)
       setDepositLink({ url: result.url, amount: result.amount })
       await reload()
     } catch (err) {
-      setDepositError(err.message)
+      setActionError(err.message)
     } finally {
       setSendingDepositId(null)
     }
   }
 
-  if (loading) return <EmptyState>Loading…</EmptyState>
-  if (error) return <EmptyState>{error}</EmptyState>
+  if (loading) return <LoadingState />
+  if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
 
   const pickerJob = jobs.find((j) => j.id === pickerFor)
 
@@ -80,12 +98,8 @@ export default function JobsBoard({ company }) {
           <Plus size={13} /> New Job
         </button>
       </div>
-      {depositError && (
-        <div style={{ background: LIGHT.alertSoft, color: LIGHT.alert, borderRadius: 10, padding: '10px 12px', fontSize: 12, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>{depositError}</span>
-          <button className="tap" onClick={() => setDepositError('')}><X size={14} color={LIGHT.alert} /></button>
-        </div>
-      )}
+      <ErrorBanner message={error && hasLoadedOnce ? error : ''} onRetry={reload} />
+      <ErrorBanner message={actionError} onDismiss={() => setActionError('')} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {COLUMNS.map((col) => {
           const colJobs = jobs.filter((j) => j.status === col)
@@ -110,11 +124,11 @@ export default function JobsBoard({ company }) {
                         </div>
                         {tech && <div style={{ width: 26, height: 26, borderRadius: 13, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 10.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initialsOf(tech.name)}</div>}
                         {!tech && suggested && (
-                          <button className="tap" onClick={() => handleAssign(j.id, suggested.id, j.status)} style={{ fontSize: 11.5, fontWeight: 600, color: '#fff', background: LIGHT.accent, borderRadius: 8, padding: '7px 10px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <CheckCircle2 size={12} /> Assign {suggested.name.split(' ')[0]}
+                          <button className="tap" onClick={() => handleAssign(j.id, suggested.id, j.status)} disabled={assigningJobId === j.id} style={{ fontSize: 11.5, fontWeight: 600, color: '#fff', background: LIGHT.accent, borderRadius: 8, padding: '7px 10px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <CheckCircle2 size={12} /> {assigningJobId === j.id ? 'Assigning…' : `Assign ${suggested.name.split(' ')[0]}`}
                           </button>
                         )}
-                        <button className="tap" onClick={() => setPickerFor(j.id)} style={{ fontSize: 16, color: LIGHT.sub, padding: '4px 6px', flexShrink: 0 }}>⋯</button>
+                        <button className="tap" onClick={() => setPickerFor(j.id)} disabled={assigningJobId === j.id} style={{ fontSize: 16, color: LIGHT.sub, padding: '4px 6px', flexShrink: 0 }}>⋯</button>
                       </div>
                       {needsDeposit && (
                         <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${LIGHT.border}` }}>
@@ -156,6 +170,7 @@ export default function JobsBoard({ company }) {
           job={pickerJob}
           techs={techs}
           techLocations={techLocations}
+          assigning={assigningJobId === pickerJob.id}
           onAssign={(techId) => handleAssign(pickerJob.id, techId, pickerJob.status)}
           onClose={() => setPickerFor(null)}
         />
@@ -164,7 +179,7 @@ export default function JobsBoard({ company }) {
         <NewJobModal
           jobTypes={jobTypes}
           onClose={() => setNewJobOpen(false)}
-          onCreated={async () => { setNewJobOpen(false); await reload() }}
+          onCreated={handleJobCreated}
         />
       )}
       {depositLink && <DepositLinkModal link={depositLink} onClose={() => setDepositLink(null)} />}
@@ -210,7 +225,7 @@ function DepositLinkModal({ link, onClose }) {
   )
 }
 
-function AssignPicker({ job, techs, techLocations, onAssign, onClose }) {
+function AssignPicker({ job, techs, techLocations, assigning, onAssign, onClose }) {
   function distanceTo(tech) {
     const loc = techLocations[tech.id]
     return distanceKm(job.lat, job.lng, loc?.lat, loc?.lng)
@@ -224,14 +239,14 @@ function AssignPicker({ job, techs, techLocations, onAssign, onClose }) {
     return da - db
   })
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
-      <div style={{ background: LIGHT.card, borderRadius: '20px 20px 0 0', padding: 20, width: '100%', maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 }} onClick={assigning ? undefined : onClose}>
+      <div style={{ background: LIGHT.card, borderRadius: '20px 20px 0 0', padding: 20, width: '100%', maxWidth: 480, opacity: assigning ? 0.6 : 1 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink, marginBottom: 2 }}>Assign to</div>
-        <div style={{ fontSize: 11.5, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 14 }}><Route size={11} /> Sorted by distance where known</div>
+        <div style={{ fontSize: 11.5, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 14 }}><Route size={11} /> {assigning ? 'Assigning…' : 'Sorted by distance where known'}</div>
         {ranked.map((t) => {
           const d = distanceTo(t)
           return (
-            <button key={t.id} className="tap" onClick={() => onAssign(t.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 6px', textAlign: 'left' }}>
+            <button key={t.id} className="tap" onClick={() => onAssign(t.id)} disabled={assigning} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 6px', textAlign: 'left' }}>
               <div style={{ width: 32, height: 32, borderRadius: 16, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initialsOf(t.name)}</div>
               <div style={{ flex: 1 }}><span style={{ fontSize: 14, color: LIGHT.ink }}>{t.name}</span></div>
               <span style={{ fontSize: 12, color: LIGHT.sub }}>{d != null ? `${d.toFixed(1)} km away` : '—'}</span>
@@ -271,7 +286,7 @@ function NewJobModal({ jobTypes, onClose, onCreated }) {
         priceLow: priceLow ? Number(priceLow) : null,
         priceHigh: priceHigh ? Number(priceHigh) : null,
       })
-      onCreated()
+      await onCreated()
     })
   }
 

@@ -101,6 +101,22 @@ them in the demo and this task is specifically about persistence:
 **Not built**: job photo attachments, and anything under the demo's
 Map/Clients/Insights/Team/Settings tabs.
 
+### Loading and error handling
+
+Every screen follows the same pattern via `src/dashboard/useAsyncData.js`:
+`loading` is only ever true before the *first* successful load; once data
+has loaded once, a later failure (e.g. a realtime-triggered background
+refresh) sets `error` without wiping the screen back to a loading/blank
+state - existing data stays on screen with a dismissible `ErrorBanner`
+(with Retry) on top of it, rather than a full-page `ErrorState` replacing
+everything. `ErrorState`/`ErrorBanner`/`LoadingState` all live in
+`src/dashboard/ui.jsx`. Every mutation (assign, deposit, clock in/out,
+start job, complete job, save notes, sign out) has its own
+loading/disabled state on the specific control and surfaces failures
+instead of failing silently - there is no bare `.then()` without a
+`.catch()`, and no `onClick` wired directly to an unguarded async
+function, anywhere in `src/`.
+
 ## receptionist-server → same database
 
 `receptionist-server` (the Vapi phone AI) now reads/writes the exact same
