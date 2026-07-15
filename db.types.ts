@@ -204,6 +204,7 @@ export type Database = {
           id: string
           name: string
           phone: string | null
+          pipeline_stage: string
           referral_code: string | null
           referred_by: string | null
         }
@@ -215,6 +216,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string | null
+          pipeline_stage?: string
           referral_code?: string | null
           referred_by?: string | null
         }
@@ -226,6 +228,7 @@ export type Database = {
           id?: string
           name?: string
           phone?: string | null
+          pipeline_stage?: string
           referral_code?: string | null
           referred_by?: string | null
         }

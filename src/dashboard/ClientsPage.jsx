@@ -1,0 +1,228 @@
+import { useState } from 'react'
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core'
+import { Plus, X, Phone, Mail } from 'lucide-react'
+import { listContacts, updateContactStage, createContact, PIPELINE_STAGES } from '../lib/crm'
+import { LIGHT } from '../theme'
+import { SectionLabel, LoadingState, ErrorState, ErrorBanner, initialsOf } from './ui'
+import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
+import { useAsyncData } from './useAsyncData'
+import { useTableRealtime } from './useTableRealtime'
+
+// A GoHighLevel-style pipeline: every contact is a customers row with an
+// explicit, manually-managed pipeline_stage (migration
+// 018_customers_pipeline_stage) - dragging a card is the only thing that
+// moves it. Nothing here auto-advances a stage from job/deposit/completion
+// events; that's a deliberate scope decision (see AUTH.md) since silently
+// overriding a rep's manual placement would be surprising.
+//
+// The marketing site's lead form still isn't wired to the `leads` table
+// (see AUTH.md), so this board only reflects customers created through the
+// app itself (New Job, phone bookings) or added here directly - it does
+// not yet pull in raw web-form leads.
+export default function ClientsPage({ company }) {
+  const [contacts, setContacts] = useState([])
+  const [addOpen, setAddOpen] = useState(false)
+  const [activeId, setActiveId] = useState(null)
+  const [moveError, setMoveError] = useState('')
+
+  async function load() {
+    const data = await listContacts()
+    setContacts(data)
+  }
+
+  const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [])
+  useTableRealtime('customers', company?.id, reload)
+
+  // MouseSensor (not PointerSensor) + TouchSensor, kept deliberately
+  // separate: the board scrolls horizontally on mobile, and a
+  // delay-based TouchSensor is what lets a quick horizontal swipe still
+  // scroll the page instead of every touch being captured as a drag
+  // attempt. A PointerSensor would intercept touch input too (Pointer
+  // Events cover touch in modern browsers) without that distinction.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  )
+
+  function handleDragStart(event) {
+    setActiveId(event.active.id)
+  }
+
+  async function handleDragEnd(event) {
+    setActiveId(null)
+    const { active, over } = event
+    if (!over) return
+    const contactId = active.id
+    const newStage = over.id
+    const contact = contacts.find((c) => c.id === contactId)
+    if (!contact || contact.pipeline_stage === newStage) return
+
+    const prevStage = contact.pipeline_stage
+    // Optimistic move so the drag feels instant; reverted below if the
+    // write fails, with the failure surfaced instead of silently
+    // snapping back with no explanation.
+    setContacts((cs) => cs.map((c) => (c.id === contactId ? { ...c, pipeline_stage: newStage } : c)))
+    setMoveError('')
+    try {
+      await updateContactStage(contactId, newStage)
+    } catch (err) {
+      setContacts((cs) => cs.map((c) => (c.id === contactId ? { ...c, pipeline_stage: prevStage } : c)))
+      setMoveError(err.message)
+    }
+  }
+
+  async function handleContactCreated() {
+    setAddOpen(false)
+    try {
+      await reload()
+    } catch (err) {
+      setMoveError(err.message)
+    }
+  }
+
+  if (loading) return <LoadingState />
+  if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
+
+  const activeContact = contacts.find((c) => c.id === activeId)
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <SectionLabel>Clients</SectionLabel>
+        <button className="tap" onClick={() => setAddOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: LIGHT.accent, background: LIGHT.accentSoft, borderRadius: 8, padding: '6px 10px' }}>
+          <Plus size={13} /> Add Contact
+        </button>
+      </div>
+      <ErrorBanner message={error && hasLoadedOnce ? error : ''} onRetry={reload} />
+      <ErrorBanner message={moveError} onDismiss={() => setMoveError('')} />
+
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', margin: '0 -16px', padding: '0 16px 8px' }}>
+          {PIPELINE_STAGES.map((stage) => (
+            <StageColumn
+              key={stage.key}
+              stage={stage}
+              contacts={contacts.filter((c) => c.pipeline_stage === stage.key)}
+            />
+          ))}
+        </div>
+        <DragOverlay>
+          {activeContact ? (
+            <div style={{ background: LIGHT.card, borderRadius: 12, padding: 10, width: 200, boxShadow: '0 10px 24px rgba(0,0,0,0.22)' }}>
+              <ContactCardContent contact={activeContact} />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {addOpen && <AddContactModal onClose={() => setAddOpen(false)} onCreated={handleContactCreated} />}
+    </>
+  )
+}
+
+function StageColumn({ stage, contacts }) {
+  const { setNodeRef, isOver } = useDroppable({ id: stage.key })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ flex: '0 0 210px', width: 210, background: isOver ? LIGHT.accentSoft : LIGHT.bg, borderRadius: 14, padding: 10, minHeight: 160, transition: 'background 0.12s ease' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: '0 2px' }}>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: LIGHT.ink, textTransform: 'uppercase', letterSpacing: 0.3 }}>{stage.label}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: LIGHT.sub, background: LIGHT.card, borderRadius: 10, padding: '1px 7px' }}>{contacts.length}</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {contacts.map((c) => <ContactCard key={c.id} contact={c} />)}
+        {contacts.length === 0 && <div style={{ fontSize: 11, color: LIGHT.sub, textAlign: 'center', padding: '18px 0' }}>Drop here</div>}
+      </div>
+    </div>
+  )
+}
+
+function ContactCardContent({ contact }) {
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: contact.phone || contact.email ? 6 : 0 }}>
+        <div style={{ width: 26, height: 26, borderRadius: 13, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {initialsOf(contact.name)}
+        </div>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: LIGHT.ink, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contact.name}</div>
+      </div>
+      {contact.phone && (
+        <div style={{ fontSize: 10.5, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+          <Phone size={10} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contact.phone}</span>
+        </div>
+      )}
+      {contact.email && (
+        <div style={{ fontSize: 10.5, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Mail size={10} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contact.email}</span>
+        </div>
+      )}
+    </>
+  )
+}
+
+function ContactCard({ contact }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: contact.id })
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{
+        background: LIGHT.card,
+        borderRadius: 12,
+        padding: 10,
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+        cursor: 'grab',
+        touchAction: 'none',
+        opacity: isDragging ? 0.35 : 1,
+      }}
+    >
+      <ContactCardContent contact={contact} />
+    </div>
+  )
+}
+
+function AddContactModal({ onClose, onCreated }) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [address, setAddress] = useState('')
+  const { loading, error, run } = usePendingAction()
+
+  function submit() {
+    run(async () => {
+      await createContact({ name, phone, email, address })
+      await onCreated()
+    })
+  }
+
+  const canSubmit = name.trim() && !loading
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 20 }} onClick={onClose}>
+      <div style={{ background: LIGHT.card, borderRadius: 20, padding: 20, maxWidth: 380, width: '100%', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>Add Contact</div>
+          <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
+        </div>
+
+        <FieldLabel>Name</FieldLabel>
+        <TextInput value={name} onChange={setName} placeholder="Sarah Chen" />
+        <FieldLabel>Phone</FieldLabel>
+        <TextInput value={phone} onChange={setPhone} placeholder="(403) 555-0119" type="tel" />
+        <FieldLabel>Email</FieldLabel>
+        <TextInput value={email} onChange={setEmail} placeholder="sarah@example.com" type="email" />
+        <FieldLabel>Address</FieldLabel>
+        <TextInput value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
+
+        <ErrorText>{error}</ErrorText>
+        <PrimaryButton onClick={submit} disabled={!canSubmit}>
+          {loading ? 'Adding…' : 'Add Contact'}
+        </PrimaryButton>
+        <div style={{ fontSize: 11, color: LIGHT.sub, marginTop: 10, textAlign: 'center' }}>Starts in New Lead - drag it to move stages.</div>
+      </div>
+    </div>
+  )
+}

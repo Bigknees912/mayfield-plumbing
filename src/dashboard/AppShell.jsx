@@ -1,26 +1,28 @@
 import { useState } from 'react'
-import { Home, KanbanSquare, Calendar, LogOut } from 'lucide-react'
+import { Home, KanbanSquare, Calendar, BookUser, LogOut } from 'lucide-react'
 import { LIGHT } from '../theme'
 import { GlobalStyle } from '../auth/ui'
 import { ErrorBanner } from './ui'
 import OwnerHome from './OwnerHome'
 import JobsBoard from './JobsBoard'
 import CalendarPage from './CalendarPage'
+import ClientsPage from './ClientsPage'
 import TechHome from './TechHome'
 
 const OWNER_TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'jobs', label: 'Jobs', icon: KanbanSquare },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'clients', label: 'Clients', icon: BookUser },
 ]
 const TECH_TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
 ]
 
-// Trimmed-down version of app-demo.jsx's AppShell: only Home, Jobs, and
-// Calendar are wired to real data so far, so those are the only tabs
-// shown. Map, Clients, Insights, Team, and Settings from the demo aren't
+// Trimmed-down version of app-demo.jsx's AppShell: only Home, Jobs,
+// Calendar, and Clients are wired to real data so far, so those are the
+// only tabs shown. Map, Insights, Team, and Settings from the demo aren't
 // part of this pass.
 export default function AppShell({ session, profile, onSignOut }) {
   const [tab, setTab] = useState('home')
@@ -63,6 +65,7 @@ export default function AppShell({ session, profile, onSignOut }) {
         {tab === 'home' && !isOwner && <TechHome techId={session.user.id} />}
         {tab === 'jobs' && isOwner && <JobsBoard company={company} />}
         {tab === 'calendar' && <CalendarPage myTechId={isOwner ? null : session.user.id} />}
+        {tab === 'clients' && isOwner && <ClientsPage company={company} />}
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: LIGHT.card, borderTop: `1px solid ${LIGHT.border}`, display: 'flex', justifyContent: 'center', padding: '8px 0 max(8px, env(safe-area-inset-bottom))' }}>

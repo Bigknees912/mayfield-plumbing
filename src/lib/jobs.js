@@ -80,8 +80,12 @@ export async function listTechLocationsById() {
 
 // Reuses an existing customer by phone within the company if there's an
 // exact match, otherwise creates a new one - avoids duplicate contacts for
-// repeat callers without building a full CRM matching flow.
-export async function findOrCreateCustomer({ name, phone, address }) {
+// repeat callers without building a full CRM matching flow. Only the
+// create path sets pipeline_stage (default 'booked', since this is called
+// right alongside creating a job for them) - an existing match's stage is
+// never touched, so manually dragging a contact on the Clients pipeline
+// never gets silently overwritten by a later job.
+export async function findOrCreateCustomer({ name, phone, address, pipelineStage = 'booked' }) {
   if (phone) {
     const { data: existing, error: findError } = await supabase
       .from('customers')
@@ -93,7 +97,7 @@ export async function findOrCreateCustomer({ name, phone, address }) {
   }
   const { data, error } = await supabase
     .from('customers')
-    .insert({ name, phone, address })
+    .insert({ name, phone, address, pipeline_stage: pipelineStage })
     .select()
     .single()
   if (error) throw error

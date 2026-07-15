@@ -62,8 +62,8 @@ wrappers over `supabase.auth.*` and the two RPCs), `src/auth/*.jsx`
 are ported to `src/dashboard/*.jsx`, reading and writing the real tables
 instead of local state. `src/dashboard/AppShell.jsx` replaces the
 placeholder screen in `App.jsx` once a profile exists, and only shows the
-tabs that are wired up (`Home`, `Jobs` for owners, `Calendar`) — the demo's
-Map/Clients/Insights/Team/Settings tabs aren't part of this pass.
+tabs that are wired up (`Home`, `Jobs`, `Calendar`, `Clients` for owners) —
+the demo's Map/Insights/Team/Settings tabs aren't part of this pass.
 
 Data access lives in `src/lib/jobs.js`, `src/lib/dashboard.js`, and
 `src/lib/timeEntries.js` — plain functions wrapping `supabase.from(...)`
@@ -99,7 +99,59 @@ them in the demo and this task is specifically about persistence:
   it will show "—" until one exists.
 
 **Not built**: job photo attachments, and anything under the demo's
-Map/Clients/Insights/Team/Settings tabs.
+Map/Insights/Team/Settings tabs.
+
+## CRM pipeline (Clients page)
+
+`src/dashboard/ClientsPage.jsx` — didn't exist in any prior pass (the
+demo's `ClientsPage` was explicitly out of scope until now). Built as a
+GoHighLevel-style drag-and-drop pipeline: **New Lead → Contacted → Quoted
+→ Booked → Completed → Nurture**, using `@dnd-kit/core` (`MouseSensor` +
+`TouchSensor`, not `PointerSensor` — see the code comment in
+`ClientsPage.jsx`; a plain `PointerSensor` would intercept touch input
+too, breaking the board's horizontal scroll on mobile).
+
+**Design decision worth flagging**: those six stages don't map cleanly
+onto any single existing table (`leads.status` only has
+new/contacted/converted/lost; "Quoted"/"Booked"/"Completed" are job
+concepts; "Nurture" is a `nurture_campaigns` concept). Rather than trying
+to *derive* a stage from scattered job/lead state, `customers` gained an
+explicit `pipeline_stage` column (migration
+`018_customers_pipeline_stage`) that only ever changes two ways:
+
+1. A card is dragged to a new column (`updateContactStage` in
+   `src/lib/crm.js`) - optimistic update, reverted with an `ErrorBanner`
+   if the write fails.
+2. A customer-creation call site picks a sensible starting stage:
+   `findOrCreateCustomer` (`src/lib/jobs.js`, used by `JobsBoard`'s New
+   Job form) and `receptionist-server/lib/booking.js`'s phone-booking flow
+   both default new customers to `'booked'` (a job is being created right
+   alongside), while the Clients page's own "Add Contact" defaults to
+   `'new_lead'`. Neither path ever touches an *existing* customer's
+   stage — a manual drag never gets silently overwritten by a later job.
+
+**Nothing auto-advances a stage** from job status changes, deposit
+payments, or completions (e.g. a job going `done` does not automatically
+drag its customer to "Completed"). This is a deliberate scope decision,
+not an oversight — auto-advancement means deciding whether automation is
+allowed to override a manual placement (e.g. a customer someone
+deliberately moved to "Nurture"), which is a business-logic call this
+task didn't specify. Wiring it up later would mean a DB trigger on
+`jobs`/`invoices` updating `customers.pipeline_stage`, following the same
+pattern as the SMS triggers above.
+
+**`leads` table still isn't wired up**: the marketing site's lead form
+remains a client-side stub (`console.log`, no Supabase write — see its
+own code comment), so this pipeline only reflects customers created
+through the app itself. A future pass connecting the marketing site would
+most naturally insert directly into `customers` at `'new_lead'` rather
+than `leads`, to land straight on this board.
+
+Realtime: `customers` was added to the `supabase_realtime` publication
+(same migration), and `useJobsRealtime.js` was generalized into
+`useTableRealtime.js` (table name is now a parameter) so `ClientsPage` can
+reuse it — `useJobsRealtime` itself is now a two-line wrapper around it,
+kept so `OwnerHome`/`JobsBoard`'s existing imports didn't need to change.
 
 ### Loading and error handling
 

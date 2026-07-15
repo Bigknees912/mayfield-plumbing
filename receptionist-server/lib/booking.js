@@ -94,9 +94,13 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
     customerId = existing?.id || null;
   }
   if (!customerId) {
+    // pipeline_stage: "booked" - a job is being created in the same
+    // request, same convention as the dashboard app's findOrCreateCustomer
+    // (src/lib/jobs.js). Only applies to a brand-new customer; an existing
+    // match's stage above is left untouched.
     const { data: created, error: createError } = await supabase
       .from("customers")
-      .insert({ company_id: companyId, name: customerName || "Phone caller", phone: customerPhone || null, address })
+      .insert({ company_id: companyId, name: customerName || "Phone caller", phone: customerPhone || null, address, pipeline_stage: "booked" })
       .select("id")
       .single();
     if (createError) throw createError;
