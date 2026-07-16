@@ -381,6 +381,7 @@ export type Database = {
           id: string
           name: string
           phone: string | null
+          pii_deleted_at: string | null
           pipeline_stage: string
           referral_code: string | null
           referred_by: string | null
@@ -397,6 +398,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string | null
+          pii_deleted_at?: string | null
           pipeline_stage?: string
           referral_code?: string | null
           referred_by?: string | null
@@ -413,6 +415,7 @@ export type Database = {
           id?: string
           name?: string
           phone?: string | null
+          pii_deleted_at?: string | null
           pipeline_stage?: string
           referral_code?: string | null
           referred_by?: string | null
@@ -434,6 +437,62 @@ export type Database = {
             columns: ["referred_by"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      data_deletion_requests: {
+        Row: {
+          company_id: string | null
+          company_name_provided: string | null
+          created_at: string
+          details: string | null
+          due_date: string
+          id: string
+          request_type: string
+          requester_email: string
+          requester_name: string
+          requester_phone: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          company_id?: string | null
+          company_name_provided?: string | null
+          created_at?: string
+          details?: string | null
+          due_date: string
+          id?: string
+          request_type: string
+          requester_email: string
+          requester_name: string
+          requester_phone?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          company_id?: string | null
+          company_name_provided?: string | null
+          created_at?: string
+          details?: string | null
+          due_date?: string
+          id?: string
+          request_type?: string
+          requester_email?: string
+          requester_name?: string
+          requester_phone?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_deletion_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -1105,6 +1164,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      anonymize_customer_pii: {
+        Args: { p_customer_id: string; p_note?: string }
+        Returns: undefined
+      }
       create_company_and_owner: {
         Args: {
           p_business_name: string

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Request — Mayfield Plumbing & Drain</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+  :root {
+    --ink: #0F1B2A; --mist: #F4F7F8; --paper: #FFFFFF; --copper: #C1682E;
+    --copper-bright: #E08544; --steel: #5C6B78; --line: #E1E6E9; --success: #2F7A5C; --alert: #BF4C3C;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; color: var(--ink); background: var(--mist); }
+  h1, h2 { font-family: 'Oswald', sans-serif; font-weight: 600; }
+  a { color: var(--copper); }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 24px; }
+  header { background: var(--ink); color: #fff; padding: 40px 0; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--copper-bright); }
+  header a.back { color: #C7D2DA; font-size: 13px; }
+  main { padding: 50px 0 80px; }
+  h1.title { font-size: 28px; margin-bottom: 8px; }
+  p.sub { font-size: 14.5px; color: var(--steel); line-height: 1.6; margin-bottom: 26px; }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 30px; }
+  label { display: block; font-size: 12px; font-weight: 700; color: var(--steel); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; margin-top: 16px; }
+  label:first-of-type { margin-top: 0; }
+  input, select, textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 11px 13px; font-size: 14px;
+    font-family: 'Inter', sans-serif; color: var(--ink); background: #FAFBFC;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--copper); }
+  textarea { resize: vertical; min-height: 80px; }
+  .radio-row { display: flex; gap: 10px; margin-top: 6px; }
+  .radio-opt { flex: 1; border: 1.5px solid var(--line); border-radius: 8px; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--steel); }
+  .radio-opt.active { border-color: var(--copper); background: #FBF1E7; color: var(--copper); }
+  .radio-opt input { display: none; }
+  button[type="submit"] {
+    width: 100%; background: var(--copper); color: #fff; border: none; border-radius: 8px; padding: 14px 0;
+    font-size: 14.5px; font-weight: 600; cursor: pointer; margin-top: 22px;
+  }
+  button[type="submit"]:hover { background: var(--copper-bright); }
+  button[type="submit"]:disabled { background: var(--steel); cursor: not-allowed; }
+  .note { font-size: 12px; color: var(--steel); margin-top: 12px; line-height: 1.6; }
+  .error-text { color: var(--alert); font-size: 13px; margin-top: 10px; display: none; }
+  .error-text.show { display: block; }
+  .success { display: none; text-align: center; padding: 20px 4px; }
+  .success.show { display: block; }
+  .success .check { width: 46px; height: 46px; border-radius: 50%; background: #E4EEE7; color: var(--success); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px auto; font-size: 22px; }
+  .success h2 { font-size: 18px; margin-bottom: 6px; }
+  .success p { color: var(--steel); font-size: 13.5px; line-height: 1.6; }
+  footer { background: var(--ink); color: #93A2AD; padding: 30px 0; font-size: 12.5px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer a { color: #C7D2DA; margin-right: 16px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo"><span class="dot"></span> Mayfield Plumbing &amp; Drain</div>
+    <a href="marketing-site.html" class="back">← Back to site</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <h1 class="title">Request your data</h1>
+    <p class="sub">Ask us to send you a copy of your personal information, correct
+    something that's wrong, or delete it. See our <a href="privacy.html">Privacy
+    Policy</a> for details on your rights. We respond within 30 days.</p>
+
+    <div class="card">
+      <form id="requestForm">
+        <label>What would you like to do?</label>
+        <div class="radio-row">
+          <label class="radio-opt active" data-type="access">
+            <input type="radio" name="requestType" value="access" checked> See my data
+          </label>
+          <label class="radio-opt" data-type="correction">
+            <input type="radio" name="requestType" value="correction"> Correct it
+          </label>
+          <label class="radio-opt" data-type="deletion">
+            <input type="radio" name="requestType" value="deletion"> Delete it
+          </label>
+        </div>
+
+        <label for="dr-name">Your full name</label>
+        <input type="text" id="dr-name" required>
+
+        <label for="dr-email">Email address</label>
+        <input type="email" id="dr-email" required placeholder="We'll send confirmation here">
+
+        <label for="dr-phone">Phone number (optional)</label>
+        <input type="tel" id="dr-phone" placeholder="The number we may have on file for you">
+
+        <label for="dr-company">Which business is this about?</label>
+        <input type="text" id="dr-company" value="Mayfield Plumbing &amp; Drain">
+
+        <label for="dr-details">Anything else that helps us find your record</label>
+        <textarea id="dr-details" placeholder="e.g. approximate date of service, address on file..."></textarea>
+
+        <button type="submit" id="dr-submit">Submit Request</button>
+        <div class="error-text" id="dr-error"></div>
+        <div class="note">By submitting, you're asking us to act on your own personal
+        information. We may ask you to verify your identity before completing a
+        deletion request.</div>
+      </form>
+
+      <div class="success" id="dr-success">
+        <div class="check">✓</div>
+        <h2>Request received</h2>
+        <p>We've emailed a confirmation to the address you provided. We'll respond
+        within 30 days, as required under applicable privacy law.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a href="marketing-site.html">Home</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="data-request.html">My Data / Privacy Requests</a>
+    </div>
+    <div>© 2026 Mayfield Plumbing &amp; Drain</div>
+  </div>
+</footer>
+
+<script>
+  // Radio-style pill selection
+  const opts = document.querySelectorAll('.radio-opt');
+  opts.forEach((opt) => {
+    opt.addEventListener('click', () => {
+      opts.forEach((o) => o.classList.remove('active'));
+      opt.classList.add('active');
+      opt.querySelector('input').checked = true;
+    });
+  });
+
+  // Wired to the submit-data-request Edge Function (public, no auth
+  // required - see supabase/functions/submit-data-request). The
+  // publishable key below is safe to embed in client-side code by design,
+  // same as any Supabase anon key - it only grants what RLS/this
+  // function's own logic explicitly allow.
+  const SUPABASE_URL = 'https://umtoseyxvszdxbuvuyuk.supabase.co';
+  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_DzyllacMgWg-TUMMO2-c2Q_YYzaS-lM';
+
+  const form = document.getElementById('requestForm');
+  const errorEl = document.getElementById('dr-error');
+  const submitBtn = document.getElementById('dr-submit');
+  const successEl = document.getElementById('dr-success');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorEl.classList.remove('show');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+
+    const body = {
+      requestType: document.querySelector('input[name="requestType"]:checked').value,
+      requesterName: document.getElementById('dr-name').value,
+      requesterEmail: document.getElementById('dr-email').value,
+      requesterPhone: document.getElementById('dr-phone').value,
+      companyName: document.getElementById('dr-company').value,
+      details: document.getElementById('dr-details').value,
+    };
+
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/submit-data-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Something went wrong. Please try again or email privacy@mayfieldplumbing.example directly.');
+
+      form.style.display = 'none';
+      successEl.classList.add('show');
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.add('show');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Request';
+    }
+  });
+</script>
+
+</body>
+</html>

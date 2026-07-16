@@ -845,6 +845,142 @@ a number that's already opted out, and the dashboard would keep showing
   there's no automatic detection for anything other than a Twilio STOP
   reply.
 
+## Terms of Service, Privacy Policy & data deletion requests
+
+**Same disclaimer as the SMS consent section above, and it matters more
+here: `terms.html` and `privacy.html` are legal documents, generated as a
+good-faith starting template informed by researched GDPR (right to
+erasure, Article 17) and PIPEDA (access/disposal, the "Openness"
+principle) requirements current as of this build. They have not been
+reviewed by a lawyer and should be before a real business relies on
+them.** The template covers standard terms (quotes non-binding until
+confirmed, deposit/payment terms, licensing disclaimer, liability
+limitation, Alberta/Canada governing law) and standard privacy disclosures
+(what's collected, why, which subprocessors touch it, retention, rights,
+breach notification) — but it can't know your actual insurance coverage,
+your actual retention practices, or your actual subprocessor list if it
+changes. Update the content in those files (and the placeholder contact
+emails/phone number) before publishing.
+
+**Important scoping note**: `marketing-site.html` is a single plumbing
+company's own public-facing website (the fictional "Mayfield Plumbing &
+Drain" reference tenant), not the SaaS platform's own marketing site — so
+these Terms/Privacy Policy govern that company's relationship with the
+*homeowners* who call them for service, not Mayfield-the-software's
+relationship with the plumbing businesses that use it. That's a
+deliberate reading of the existing file's content (hero copy, lead form,
+"Licensed & Insured, Alberta" footer) — a future per-tenant site generator
+would need its own copy of these three pages per company.
+
+### New pages
+
+- **`terms.html`** / **`privacy.html`** — static pages matching the main
+  site's visual style (same CSS custom properties, fonts), linked from
+  every page's footer. `privacy.html` documents the real third parties
+  this app actually uses (Twilio for SMS, Stripe for payments, Vapi/
+  Anthropic for the AI receptionist, Resend for email, Supabase — hosted
+  in Canada — for the database) rather than generic boilerplate, since
+  those are the actual data flows in this codebase.
+- **`data-request.html`** — a form for access/correction/deletion
+  requests, submitted directly to the `submit-data-request` Edge Function
+  (below) via `fetch()`, using the project's publishable key (safe to
+  embed client-side, same as any Supabase anon key). Confirms with a
+  visible "Request received" state and a follow-up confirmation email.
+
+### `data_deletion_requests` (migration `034`)
+
+Public-facing intake — the requester (a homeowner, not a dashboard user)
+typically has no account in this system at all, so this can't be scoped
+by `current_company_id()` the way every other table in this app is. Only
+the service role writes to it (via the Edge Function below), matching how
+`leads`/`calls` already handle public-facing writes in this app — never
+a raw anon RLS insert policy.
+
+- **`request_type`**: `access` / `correction` / `deletion` — the form
+  supports all three since PIPEDA and GDPR both mandate access-request
+  handling equally with erasure, not just deletion.
+- **`due_date`**: set to 30 days from submission at insert time
+  (PIPEDA's access-request timeline; GDPR's is "without undue delay,
+  within one month," effectively the same baseline) — a concrete,
+  queryable deadline rather than just a policy statement.
+- **`company_id`**: nullable, best-effort resolved by matching the
+  requester's freeform `company_name_provided` against `companies.name`
+  in the Edge Function. Not load-bearing for anything — the notification
+  email below is the real mechanism that ensures a human sees the
+  request — just a convenience for a possible future owner-facing view.
+  A `SELECT` policy (`company_id = current_company_id() and
+  "current_role"() = 'owner'`) exists for that future view even though
+  no page reads it yet.
+- **Who actually handles these today**: there's no Mayfield-platform
+  admin panel in this app (every other table is scoped to a single
+  tenant; this one deliberately isn't, since a request may not even name
+  the right company). Today, requests are triaged by whoever holds
+  `PRIVACY_CONTACT_EMAIL` — the platform operator — via the notification
+  email plus direct Supabase Table Editor access, same as several other
+  platform-level operational tasks already documented in this file (e.g.
+  setting `companies.google_review_link` before self-serve onboarding
+  existed). A company owner who wants to act on a request about their own
+  customer uses the `ContactDetailModal` action below.
+
+### `submit-data-request` Edge Function
+
+`verify_jwt: false` (public - no Supabase session exists for a website
+visitor), validates the request, inserts into `data_deletion_requests`,
+then best-effort sends two emails via Resend (reusing the
+`RESEND_API_KEY`/`RESEND_FROM_EMAIL` secrets from the automation email
+channel): one to `PRIVACY_CONTACT_EMAIL` with the full request detail and
+due date, one to the requester confirming receipt. Both emails are
+best-effort — the request is already durably saved before either send is
+attempted, so a Resend hiccup never surfaces as a failed submission to
+the requester.
+
+**New required secret**: `PRIVACY_CONTACT_EMAIL` (Supabase dashboard →
+Edge Functions → Secrets) — the inbox that gets notified of every new
+request. Not set yet; without it, requests still save correctly, they
+just don't trigger the internal notification email (the requester's
+confirmation email still sends, as long as Resend itself is configured).
+
+### Fulfilling a deletion request: `anonymize_customer_pii` (migration `033`)
+
+GDPR's Article 17 and PIPEDA's disposal principle both recognize an
+exception to erasure for data an organization is legally required to keep
+(accounting, tax, warranty records) — so this **anonymizes a customer's
+identifying fields in place rather than deleting the row**:
+`name`→`'Deleted Customer'`, `phone`/`email`/`address`/`referral_code`/
+`referred_by`→`null`, `tags`→`{}`, SMS consent forced off (logged to
+`sms_consent_events` with the new `'pii_deletion'` method - added to
+*both* the `sms_consent_events.method` and `customers.sms_consent_method`
+check constraints; the first pass only caught the former, and a
+rolled-back transactional test caught the mismatch before it shipped).
+`customers.pii_deleted_at` is set as the audit marker. **Jobs, invoices,
+and the interaction timeline are left completely untouched** - those are
+the legitimate business records the exception exists for.
+
+Owner-only (`SECURITY DEFINER`, checked explicitly like
+`record_sms_consent`), granted to `authenticated` only, verified live via
+a rolled-back transactional test (successful same-company anonymization,
+plus a rejected cross-company attempt).
+
+**Known limitation, documented rather than solved**: `customer_interactions`
+entries (notes, call logs) are free text and may mention the customer's
+name — anonymizing the `customers` row doesn't retroactively scrub
+mentions already written into old interaction notes. `ContactDetailModal`'s
+delete confirmation copy says this explicitly ("review those separately if
+they mention the customer by name") rather than silently under-delivering
+on "erasure." Building real text redaction across freeform notes is a much
+bigger, different problem than this task scoped for.
+
+**Where it's triggered**: `ContactDetailModal`'s "Delete this contact's
+personal data" danger-zone action (bottom of the modal, only shown for a
+contact that hasn't already been anonymized) — requires an explicit
+second tap to confirm, the one two-step confirmation in this app, since
+every other destructive action here (deleting an automation, removing a
+tag) is both easily undoable and far lower-stakes than irreversibly
+scrubbing a real person's contact information. Once deleted, the modal
+shows a "personal data deleted on [date]" banner in place of the contact
+info block, and hides the tag editor and SMS consent toggle (nothing left
+to tag or consent about) while keeping the interaction timeline visible.
+
 ## Schema reference
 
 All tables are in `public`, RLS-enabled, scoped by `company_id`. Two
@@ -857,7 +993,7 @@ caller's own `profiles` row.
 | `companies` | One row per tenant business; also holds pricing/ops settings (base fee, hourly rate, urgency multipliers, deposit rules, commission %, auto-assign/notify toggles) — the Settings page's "Pricing & Revenue" section. |
 | `profiles` | 1:1 with `auth.users`. `role` is `owner` or `tech`. |
 | `job_types` | Per-company catalog of job types (drain, faucet, water heater, etc.), each with hours/rate/parts cost. |
-| `customers` | CRM contacts, with referral code + who-referred-whom, and SMS consent state (`sms_consent`/`_at`/`_method` — see "SMS consent & compliance"). |
+| `customers` | CRM contacts, with referral code + who-referred-whom, SMS consent state (`sms_consent`/`_at`/`_method` — see "SMS consent & compliance"), and `pii_deleted_at` if their personal data has been anonymized (see "Terms of Service, Privacy Policy & data deletion requests"). |
 | `jobs` | Core work orders: status (`unassigned → assigned → in_progress → done`/`cancelled`), assigned tech, urgency, price range, scheduling, and `source` (`manual`/`phone_ai`/`website_lead`). |
 | `job_status_events` | Audit trail of status changes, with lat/lng for "checked in, location verified." |
 | `tech_locations` | Latest lat/lng + status (`on_job`/`en_route`/`available`/`offline`) per tech — upsert target for the live map. |
@@ -873,6 +1009,7 @@ caller's own `profiles` row.
 | `automations` | No-code trigger → wait → action rules (see "Automation builder"). Owner-only read/write. |
 | `automation_runs` | Delay queue for `automations` — one row per matching trigger event, executed by `run_due_automations()` on a `pg_cron` schedule. Owner-only read. |
 | `sms_consent_events` | Append-only audit trail of every SMS consent change (see "SMS consent & compliance"). No update/delete policy — a consent record isn't evidence if it can be edited. |
+| `data_deletion_requests` | Public GDPR/PIPEDA-style access/correction/deletion request intake from a company's marketing site (see "Terms of Service, Privacy Policy & data deletion requests"). Written only by the service role; not scoped to a single company the way every other table is. |
 
 ### RLS pattern
 

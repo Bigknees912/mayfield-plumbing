@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { X, Phone, Mail, MapPin, StickyNote, PhoneCall, MessageCircle, MessageCircleOff } from 'lucide-react'
-import { listInteractions, addInteraction, updateContactTags, updateContactConsent, PIPELINE_STAGES } from '../lib/crm'
+import { X, Phone, Mail, MapPin, StickyNote, PhoneCall, MessageCircle, MessageCircleOff, ShieldOff, Trash2 } from 'lucide-react'
+import { listInteractions, addInteraction, updateContactTags, updateContactConsent, deleteContactPii, PIPELINE_STAGES } from '../lib/crm'
 import { LIGHT } from '../theme'
 import { initialsOf, LoadingState, ErrorState, ErrorBanner } from './ui'
 import { FieldLabel, ErrorText, usePendingAction } from '../auth/ui'
@@ -13,7 +13,7 @@ function formatWhen(iso) {
 // Opened by clicking a card on the pipeline board (see ClientsPage.jsx).
 // Two things live here that the compact card can't show: the tag editor
 // and the interaction timeline (view + add note/log call).
-export default function ContactDetailModal({ contact, allTags, onClose, onTagsChanged, onConsentChanged }) {
+export default function ContactDetailModal({ contact, allTags, onClose, onTagsChanged, onConsentChanged, onPiiDeleted }) {
   const [interactions, setInteractions] = useState([])
   const [tags, setTags] = useState(contact.tags || [])
   const [tagInput, setTagInput] = useState('')
@@ -21,6 +21,10 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
   const [smsConsent, setSmsConsent] = useState(contact.sms_consent ?? false)
   const [consentSaving, setConsentSaving] = useState(false)
   const [consentError, setConsentError] = useState('')
+  const [piiDeletedAt, setPiiDeletedAt] = useState(contact.pii_deleted_at || null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deletingPii, setDeletingPii] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [composerType, setComposerType] = useState('note')
   const [composerBody, setComposerBody] = useState('')
   const { loading: posting, error: postError, run: runPost } = usePendingAction()
@@ -74,6 +78,30 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
     }
   }
 
+  // GDPR/PIPEDA-style erasure - irreversible, so this requires an explicit
+  // second tap (see the confirmingDelete UI below) rather than firing on
+  // the first click like every other action in this modal. Only scrubs
+  // structured fields (name/phone/email/address/tags) - jobs and invoices
+  // tied to this customer are untouched (legitimate accounting/warranty
+  // records), and existing note/call timeline entries below aren't
+  // auto-redacted even if they happen to mention the customer's name -
+  // see AUTH.md "Data deletion & privacy requests" for that limitation.
+  async function confirmDeletePii() {
+    setDeletingPii(true)
+    setDeleteError('')
+    try {
+      await deleteContactPii(contact.id, 'Deleted from contact detail')
+      const now = new Date().toISOString()
+      setPiiDeletedAt(now)
+      setConfirmingDelete(false)
+      onPiiDeleted(contact.id, now)
+    } catch (err) {
+      setDeleteError(err.message)
+    } finally {
+      setDeletingPii(false)
+    }
+  }
+
   function submitInteraction() {
     if (!composerBody.trim()) return
     runPost(async () => {
@@ -104,14 +132,24 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
           <button className="tap" onClick={onClose}><X size={20} color={LIGHT.sub} /></button>
         </div>
 
-        <div style={{ background: LIGHT.bg, borderRadius: 14, padding: 14, marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {contact.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: LIGHT.ink }}><Phone size={13} color={LIGHT.accent} /> {contact.phone}</div>}
-          {contact.email && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: LIGHT.ink }}><Mail size={13} color={LIGHT.accent} /> {contact.email}</div>}
-          {contact.address && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: LIGHT.ink }}><MapPin size={13} color={LIGHT.accent} /> {contact.address}</div>}
-          {!contact.phone && !contact.email && !contact.address && <div style={{ fontSize: 12, color: LIGHT.sub }}>No contact details on file.</div>}
-        </div>
+        {piiDeletedAt ? (
+          <div style={{ background: LIGHT.bg, borderRadius: 14, padding: 14, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ShieldOff size={16} color={LIGHT.sub} />
+            <div style={{ fontSize: 12, color: LIGHT.sub, lineHeight: 1.4 }}>
+              This contact's personal data was deleted on {formatWhen(piiDeletedAt)}.
+              Job and payment records are kept for accounting purposes.
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: LIGHT.bg, borderRadius: 14, padding: 14, marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {contact.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: LIGHT.ink }}><Phone size={13} color={LIGHT.accent} /> {contact.phone}</div>}
+            {contact.email && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: LIGHT.ink }}><Mail size={13} color={LIGHT.accent} /> {contact.email}</div>}
+            {contact.address && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: LIGHT.ink }}><MapPin size={13} color={LIGHT.accent} /> {contact.address}</div>}
+            {!contact.phone && !contact.email && !contact.address && <div style={{ fontSize: 12, color: LIGHT.sub }}>No contact details on file.</div>}
+          </div>
+        )}
 
-        {contact.phone && (
+        {!piiDeletedAt && contact.phone && (
           <>
             <div
               className="tap"
@@ -132,38 +170,42 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
           </>
         )}
 
-        <FieldLabel>Tags</FieldLabel>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-          {tags.map((t) => (
-            <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 4, background: LIGHT.accentSoft, color: LIGHT.accent, borderRadius: 20, padding: '4px 6px 4px 10px', fontSize: 11.5, fontWeight: 600 }}>
-              {t}
-              <button className="tap" onClick={() => removeTag(t)} style={{ display: 'flex', color: LIGHT.accent }}><X size={11} /></button>
-            </span>
-          ))}
-          {tags.length === 0 && <span style={{ fontSize: 11.5, color: LIGHT.sub }}>No tags yet.</span>}
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-          <input
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) } }}
-            placeholder="e.g. repeat customer, referred by Sarah"
-            style={{ flex: 1, minWidth: 0, background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 13, padding: '9px 12px', color: LIGHT.ink }}
-          />
-          <button className="tap" onClick={() => addTag(tagInput)} disabled={!tagInput.trim()} style={{ fontSize: 12.5, fontWeight: 600, color: '#fff', background: tagInput.trim() ? LIGHT.accent : LIGHT.border, borderRadius: 10, padding: '0 16px' }}>
-            Add
-          </button>
-        </div>
-        {tagSuggestions.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-            {tagSuggestions.map((s) => (
-              <button key={s} className="tap" onClick={() => addTag(s)} style={{ fontSize: 11, color: LIGHT.sub, border: `1px dashed ${LIGHT.border}`, borderRadius: 20, padding: '3px 10px' }}>
-                + {s}
+        {!piiDeletedAt && (
+          <>
+            <FieldLabel>Tags</FieldLabel>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {tags.map((t) => (
+                <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 4, background: LIGHT.accentSoft, color: LIGHT.accent, borderRadius: 20, padding: '4px 6px 4px 10px', fontSize: 11.5, fontWeight: 600 }}>
+                  {t}
+                  <button className="tap" onClick={() => removeTag(t)} style={{ display: 'flex', color: LIGHT.accent }}><X size={11} /></button>
+                </span>
+              ))}
+              {tags.length === 0 && <span style={{ fontSize: 11.5, color: LIGHT.sub }}>No tags yet.</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+              <input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) } }}
+                placeholder="e.g. repeat customer, referred by Sarah"
+                style={{ flex: 1, minWidth: 0, background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 13, padding: '9px 12px', color: LIGHT.ink }}
+              />
+              <button className="tap" onClick={() => addTag(tagInput)} disabled={!tagInput.trim()} style={{ fontSize: 12.5, fontWeight: 600, color: '#fff', background: tagInput.trim() ? LIGHT.accent : LIGHT.border, borderRadius: 10, padding: '0 16px' }}>
+                Add
               </button>
-            ))}
-          </div>
+            </div>
+            {tagSuggestions.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {tagSuggestions.map((s) => (
+                  <button key={s} className="tap" onClick={() => addTag(s)} style={{ fontSize: 11, color: LIGHT.sub, border: `1px dashed ${LIGHT.border}`, borderRadius: 20, padding: '3px 10px' }}>
+                    + {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            <ErrorText>{tagError}</ErrorText>
+          </>
         )}
-        <ErrorText>{tagError}</ErrorText>
 
         <FieldLabel>Timeline</FieldLabel>
         <div style={{ background: LIGHT.bg, borderRadius: 14, padding: 12, marginBottom: 14 }}>
@@ -221,6 +263,49 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
               {interactions.length === 0 && <div style={{ fontSize: 12, color: LIGHT.sub, textAlign: 'center', padding: '10px 0' }}>No interactions logged yet.</div>}
             </div>
           </>
+        )}
+
+        {!piiDeletedAt && (
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px dashed ${LIGHT.border}` }}>
+            {!confirmingDelete ? (
+              <button
+                className="tap"
+                onClick={() => setConfirmingDelete(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: LIGHT.alert }}
+              >
+                <Trash2 size={12} /> Delete this contact's personal data
+              </button>
+            ) : (
+              <div style={{ background: LIGHT.alertSoft, borderRadius: 12, padding: 14 }}>
+                <div style={{ fontSize: 12, color: LIGHT.ink, lineHeight: 1.5, marginBottom: 10 }}>
+                  This permanently removes their name, phone, email, address, and
+                  tags, and turns off SMS consent. It can't be undone. Job and
+                  payment records stay (for accounting), and existing notes/call
+                  logs below aren't edited — review those separately if they
+                  mention the customer by name.
+                </div>
+                <ErrorText>{deleteError}</ErrorText>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="tap"
+                    onClick={confirmDeletePii}
+                    disabled={deletingPii}
+                    style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#fff', background: LIGHT.alert, borderRadius: 8, padding: '9px 0' }}
+                  >
+                    {deletingPii ? 'Deleting…' : 'Yes, delete it'}
+                  </button>
+                  <button
+                    className="tap"
+                    onClick={() => { setConfirmingDelete(false); setDeleteError('') }}
+                    disabled={deletingPii}
+                    style={{ flex: 1, fontSize: 12, fontWeight: 600, color: LIGHT.ink, background: LIGHT.card, borderRadius: 8, padding: '9px 0' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

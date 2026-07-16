@@ -61,6 +61,21 @@ export async function updateContactConsent(customerId, consent) {
   await recordSmsConsent(customerId, consent, 'web_form', consent ? 'Set from contact detail' : 'Revoked from contact detail')
 }
 
+// GDPR-style erasure / PIPEDA-style disposal for a customer's personal
+// data (migration 033_pii_deletion). Wraps anonymize_customer_pii, which
+// scrubs name/phone/email/address/tags/referral fields and forces SMS
+// consent off, but deliberately does NOT delete the customer row itself
+// or any jobs/invoices - those are legitimate business/accounting records
+// both GDPR and PIPEDA recognize as an exception to erasure. Irreversible
+// - see the confirm step in ContactDetailModal.jsx before calling this.
+export async function deleteContactPii(customerId, note) {
+  const { error } = await supabase.rpc('anonymize_customer_pii', {
+    p_customer_id: customerId,
+    p_note: note || null,
+  })
+  if (error) throw error
+}
+
 // Append-only interaction timeline (customer_interactions has no update
 // RLS policy, by design - see migration 019). created_by/company_id are
 // both DB-side defaults (auth.uid() / current_company_id()), not supplied

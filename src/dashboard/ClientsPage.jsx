@@ -96,6 +96,15 @@ export default function ClientsPage({ company }) {
     setContacts((cs) => cs.map((c) => (c.id === contactId ? { ...c, sms_consent: smsConsent } : c)))
   }
 
+  // Patches the card's identifying fields to their anonymized state after
+  // a PII deletion in ContactDetailModal, so the board (which still shows
+  // name/phone/tags on the card) reflects it without a full reload.
+  function handlePiiDeleted(contactId, deletedAt) {
+    setContacts((cs) => cs.map((c) => (c.id === contactId
+      ? { ...c, name: 'Deleted Customer', phone: null, email: null, address: null, tags: [], sms_consent: false, pii_deleted_at: deletedAt }
+      : c)))
+  }
+
   if (loading) return <LoadingState />
   if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
 
@@ -142,6 +151,7 @@ export default function ClientsPage({ company }) {
           onClose={() => setDetailForId(null)}
           onTagsChanged={handleTagsChanged}
           onConsentChanged={handleConsentChanged}
+          onPiiDeleted={handlePiiDeleted}
         />
       )}
     </>
