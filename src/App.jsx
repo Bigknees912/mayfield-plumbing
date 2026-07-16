@@ -5,6 +5,7 @@ import LoginScreen from './auth/LoginScreen'
 import SignupScreen from './auth/SignupScreen'
 import CheckEmailScreen from './auth/CheckEmailScreen'
 import RoleChoiceScreen from './auth/RoleChoiceScreen'
+import PlanSelectionScreen from './auth/PlanSelectionScreen'
 import OwnerOnboardingScreen from './auth/OwnerOnboardingScreen'
 import EmployeeJoinScreen from './auth/EmployeeJoinScreen'
 import { AuthShell, LIGHT } from './auth/ui'
@@ -30,7 +31,8 @@ export default function App() {
   const [refreshError, setRefreshError] = useState('')
   const [preAuthScreen, setPreAuthScreen] = useState('login') // login | signup | check-email
   const [pendingEmail, setPendingEmail] = useState('')
-  const [postAuthScreen, setPostAuthScreen] = useState('role-choice') // role-choice | owner-onboarding | employee-join
+  const [postAuthScreen, setPostAuthScreen] = useState('role-choice') // role-choice | plan-selection | owner-onboarding | employee-join
+  const [selectedPlan, setSelectedPlan] = useState('starter')
 
   function loadSession() {
     setSessionError('')
@@ -44,6 +46,7 @@ export default function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession)
       setPostAuthScreen('role-choice')
+      setSelectedPlan('starter')
       if (!newSession) setPreAuthScreen('login')
     })
     return () => listener.subscription.unsubscribe()
@@ -117,15 +120,25 @@ export default function App() {
 
   if (!profile) {
     let screen
-    if (postAuthScreen === 'owner-onboarding') {
-      screen = <OwnerOnboardingScreen onBack={() => setPostAuthScreen('role-choice')} onDone={refreshProfile} />
+    if (postAuthScreen === 'plan-selection') {
+      screen = (
+        <PlanSelectionScreen
+          onBack={() => setPostAuthScreen('role-choice')}
+          onContinue={(plan) => {
+            setSelectedPlan(plan)
+            setPostAuthScreen('owner-onboarding')
+          }}
+        />
+      )
+    } else if (postAuthScreen === 'owner-onboarding') {
+      screen = <OwnerOnboardingScreen plan={selectedPlan} onBack={() => setPostAuthScreen('plan-selection')} onDone={refreshProfile} />
     } else if (postAuthScreen === 'employee-join') {
       screen = <EmployeeJoinScreen onBack={() => setPostAuthScreen('role-choice')} onDone={refreshProfile} />
     } else {
       screen = (
         <RoleChoiceScreen
           userEmail={session.user.email}
-          onPickOwner={() => setPostAuthScreen('owner-onboarding')}
+          onPickOwner={() => setPostAuthScreen('plan-selection')}
           onPickEmployee={() => setPostAuthScreen('employee-join')}
         />
       )

@@ -364,13 +364,14 @@ Secrets, same no-CLI path as the Stripe secrets):
   E.164 format (e.g. `+14035551234`). One number handles both inbound
   voice and outbound SMS.
 
-**Required setup on the company itself**: `companies.google_review_link`
-starts `null` — there's no Settings screen yet to edit it through, so set
-it directly (Supabase dashboard → Table Editor → companies → edit the
-row), or give me the business's Google review link and I'll set it via a
-query. Get the link from Google Business Profile → "Ask for reviews" (a
-short `g.page/r/.../review` link) or a `search.google.com/local/writereview?placeid=...`
-URL for the business's Place ID.
+**Setting the company's review link**: `companies.google_review_link` is
+now collected as an optional field during self-serve signup (see "Self-serve
+onboarding & billing") — get the link from Google Business Profile → "Ask
+for reviews" (a short `g.page/r/.../review` link) or a
+`search.google.com/local/writereview?placeid=...` URL for the business's
+Place ID. For a company that already exists and skipped it, there's still
+no Settings screen to edit it through, so it's a manual Table Editor edit
+(or ask me to run the update query) until that's built.
 
 **Message sent**: `"Hi {FirstName}, thanks for choosing {CompanyName}! If
 you have a minute, a quick Google review helps us a lot: {link}"`.
@@ -542,10 +543,12 @@ that gap. Call one of them client-side immediately after
 "starting a business" vs. "joining a team" (mirrors the demo's
 `SignupChoice` screen):
 
-- **Owner**: `supabase.rpc('create_company_and_owner', { p_business_name, p_owner_name, p_trade, p_team_size, p_service_area })`
-  Creates the `companies` row, a join code, the caller's `profiles` row
-  (`role: 'owner'`), and a `starter`-plan `subscriptions` row. Returns the
-  new `companies` row.
+- **Owner**: `supabase.rpc('create_company_and_owner', { p_business_name, p_owner_name, p_trade, p_team_size, p_service_area, p_plan, p_google_review_link })`
+  Creates the `companies` row (with a join code, and the review link if one
+  was given), the caller's `profiles` row (`role: 'owner'`), and a
+  `subscriptions` row on the chosen `p_plan` (`starter` if omitted). See
+  "Self-serve onboarding & billing" below for what `p_plan` actually does.
+  Returns the new `companies` row.
 - **Tech**: `supabase.rpc('join_company_as_tech', { p_join_code, p_name })`
   Looks up the company by join code and creates the caller's `profiles` row
   (`role: 'tech'`). Raises `invalid join code` if no match — surface that as
@@ -559,6 +562,121 @@ exists for this user`) — a user can only belong to one company.
 After either RPC succeeds, fetch the caller's `profiles` row to get
 `role`/`company_id` and drive which UI (`owner` vs `tech` tabs) to show —
 same split as `AppShell` in the demo.
+
+## Self-serve onboarding & billing
+
+The full owner signup wizard now has 4 steps with no manual step by you in
+between: **Sign up** (`SignupScreen`, email/password or Google) → **Choose
+your plan** (`PlanSelectionScreen`, new) → **Set up your business**
+(`OwnerOnboardingScreen`, extended) → done. This closes the two gaps that
+previously required you to do something by hand for every new company:
+picking/paying for a plan wasn't possible at all (every company silently
+got `starter` for free, forever), and `companies.google_review_link` had
+no UI — the only way to set it was a manual SQL edit (see the "Superseded"
+note under "Review-request SMS" for that old instruction).
+
+**`PlanSelectionScreen.jsx`** (`src/auth/PlanSelectionScreen.jsx`, new step
+in `App.jsx`'s `postAuthScreen` state machine, between `role-choice` and
+`owner-onboarding`): shows the 3 plan cards from `src/lib/plans.js`'s
+`PLANS` array and hands the chosen key up to `App.jsx` (`selectedPlan`
+state), which passes it into `OwnerOnboardingScreen` as a prop. **The
+prices shown are placeholders** ($0 / $49 / $149) — they're just display
+text in `plans.js`, safe to edit freely. What actually charges a card is
+the Stripe Price object each paid plan maps to (below), so changing a
+number in `plans.js` alone does nothing to real billing.
+
+**`OwnerOnboardingScreen.jsx`** now also collects an optional Google review
+link (self-serve replacement for the old manual SQL step), and its submit
+does one more thing after `create_company_and_owner()` succeeds: if the
+chosen plan isn't `starter` (free), it calls `create-subscription-checkout`
+and redirects the browser to the returned Stripe-hosted Checkout URL
+(`window.location.href = url`). If that call itself fails — most likely
+because Stripe pricing isn't configured yet, see below — the workspace was
+still created successfully (that already committed), so the owner isn't
+stranded: an alert explains billing didn't finish and they're dropped into
+the dashboard anyway, on whatever plan/status `create_company_and_owner`
+already set.
+
+**Plan → subscription status**, decided inside `create_company_and_owner`
+(migration `029`): `starter` has no Stripe involved at all and starts
+`status: 'active'` immediately (same default behavior as before this
+task). `growth`/`pro` start `status: 'incomplete'` — a new value added to
+`subscriptions.status`'s check constraint — until Stripe Checkout actually
+completes and the webhook flips it to `'active'`. **Nothing in the app
+currently gates features by plan or status** — this is intentionally just
+correct, honest data for now; building paywalled features is a separate,
+unrequested task. `status: 'incomplete'` companies can use the app exactly
+like `active` ones today.
+
+**`create-subscription-checkout`** (Edge Function, `verify_jwt: true`) —
+mirrors `create-deposit-checkout`'s pattern exactly: an RLS-scoped client
+built from the caller's forwarded JWT resolves *their own* `company_id`
+and `role` server-side (never trusts a client-supplied company id),
+rejects non-owners, maps the requested plan to a Stripe Price via env var
+(`STRIPE_PRICE_GROWTH` / `STRIPE_PRICE_PRO`), and creates a `mode:
+'subscription'` Checkout Session. `company_id` and `plan` are set as
+metadata on **both** the Checkout Session and, via `subscription_data.metadata`,
+the underlying Stripe Subscription object itself — the latter is what lets
+`stripe-webhook` route `customer.subscription.updated`/`.deleted` events
+(which don't carry the session's own metadata) back to the right company
+row. If the relevant `STRIPE_PRICE_*` secret isn't set yet, this returns a
+clear 500 with an explanatory message instead of an opaque crash.
+
+**`stripe-webhook`** now handles three event types instead of one:
+- `checkout.session.completed` branches on `session.mode` — `'payment'`
+  is the existing job-deposit flow (unchanged); `'subscription'` fetches
+  the full Stripe Subscription object (for `current_period_end`, which the
+  Checkout Session itself doesn't carry) and syncs it to `subscriptions`.
+- `customer.subscription.updated` / `customer.subscription.deleted` keep
+  `subscriptions.status`/`current_period_end` in sync with Stripe's actual
+  billing state after the initial checkout — a failed renewal, a
+  cancellation, etc. Stripe's own statuses (`trialing`, `unpaid`,
+  `incomplete_expired`, `paused`, ...) are collapsed onto our 4-value
+  check constraint by `mapSubscriptionStatus()` in the function.
+
+**One-time Stripe setup to finish self-serve billing** (extends the
+existing "One-time Stripe setup" steps under "Deposit collection" — same
+Stripe account, same `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` already
+configured there):
+1. **Products → Add product**, one each for Growth and Pro, with a
+   **recurring** Price (monthly, whatever amount you actually want to
+   charge — the `plans.js` display prices are just placeholders and don't
+   need to match until you edit them to match). Copy each Price's ID
+   (`price_...`).
+2. Supabase dashboard → **Edge Functions → Secrets**: add
+   `STRIPE_PRICE_GROWTH` and `STRIPE_PRICE_PRO` with those Price IDs.
+3. On the **same** webhook endpoint you already created for deposits
+   (`.../functions/v1/stripe-webhook`), add two more listened events:
+   `customer.subscription.updated` and `customer.subscription.deleted`
+   (`checkout.session.completed` is already there). No new endpoint, no
+   new signing secret — it's the same `STRIPE_WEBHOOK_SECRET`.
+4. Repeat both steps in **Live mode** once you're ready for real charges
+   (test and live Products/Prices are separate in Stripe, same as the
+   deposit flow's test/live keys).
+
+Until step 1–2 are done, `PlanSelectionScreen` still works and companies
+still get created on any plan — `create-subscription-checkout` just
+returns a clear "billing isn't set up yet" error, which the owner sees as
+a non-blocking alert (see above), not a broken signup.
+
+**Verified**: a rolled-back transactional test (nothing committed) called
+`create_company_and_owner` end-to-end with a `growth` plan and a review
+link and confirmed the resulting row has `plan: 'growth'`, `status:
+'incomplete'`, and the review link set; a second run with no plan/link
+arguments confirmed the `starter`/`active`/`null` defaults still work
+unchanged; a second signup attempt for the same user was correctly
+rejected. **Bug caught and fixed during this pass**: `CREATE OR REPLACE
+FUNCTION create_company_and_owner(...)` with two new parameters doesn't
+replace the original 5-argument function in Postgres — a different
+parameter list is a different *overload*, so the old 5-arg version was
+still sitting there afterward, un-migrated grants and all (still
+`anon`/`PUBLIC`-executable, unlike the tightened 7-arg version). Caught via
+`get_advisors` showing the same function twice, fixed by dropping the old
+overload explicitly (migration `031`). **Lesson**: `CREATE OR REPLACE
+FUNCTION` only replaces a function whose parameter list is identical
+(including order and types) to what's being created — adding, removing, or
+reordering parameters always creates a new overload alongside the old one
+unless you explicitly `DROP FUNCTION` the old signature first.
 
 ## Google OAuth setup (manual, one-time)
 
@@ -604,7 +722,7 @@ caller's own `profiles` row.
 | `feedback` | Post-job sentiment; powers the owner's negative-feedback recovery alert. |
 | `nurture_campaigns` / `campaign_enrollments` | Automated customer follow-up campaigns and who's enrolled. |
 | `invoices` | Auto-generated on job completion. |
-| `subscriptions` | Plan (`starter`/`growth`/`pro`) and Stripe IDs — schema only, no Stripe webhook wired up yet. |
+| `subscriptions` | Plan (`starter`/`growth`/`pro`), status (`incomplete`/`active`/`past_due`/`canceled`), and Stripe IDs — kept live by `stripe-webhook` for paid plans (see "Self-serve onboarding & billing"). Nothing in the app gates on this yet. |
 | `integrations` | Connect-state for Google Calendar / QuickBooks / Slack / Stripe — schema only, no OAuth flows wired up yet. |
 | `customer_interactions` | Notes/call-log timeline entries for a `customers` row. Append-only. |
 | `automations` | No-code trigger → wait → action rules (see "Automation builder"). Owner-only read/write. |

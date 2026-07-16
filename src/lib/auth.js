@@ -42,15 +42,18 @@ export async function fetchProfile(userId) {
   return data
 }
 
-// Wraps the create_company_and_owner RPC (migration 006). Requires an
+// Wraps the create_company_and_owner RPC (migration 006, extended in 029
+// with plan + Google review link for self-serve onboarding). Requires an
 // active session - call only after auth.uid() resolves to a real user.
-export async function createCompanyAndOwner({ businessName, ownerName, trade, teamSize, serviceArea }) {
+export async function createCompanyAndOwner({ businessName, ownerName, trade, teamSize, serviceArea, plan, googleReviewLink }) {
   const { data, error } = await supabase.rpc('create_company_and_owner', {
     p_business_name: businessName,
     p_owner_name: ownerName,
     p_trade: trade,
     p_team_size: teamSize,
     p_service_area: serviceArea,
+    p_plan: plan || 'starter',
+    p_google_review_link: googleReviewLink || null,
   })
   if (error) throw error
   return data

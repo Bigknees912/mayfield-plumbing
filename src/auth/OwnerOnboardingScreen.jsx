@@ -1,22 +1,39 @@
 import { useState } from 'react'
 import { createCompanyAndOwner } from '../lib/auth'
+import { planRequiresCheckout, createSubscriptionCheckout } from '../lib/plans'
 import { AuthShell, BackRow, FieldLabel, TextInput, ChipRow, PrimaryButton, ErrorText, LIGHT, usePendingAction } from './ui'
 
 // Combines app-demo.jsx's OwnerSignup (business name, your name) and
 // Onboarding (trade, team size, service area) into one post-auth screen -
 // see RoleChoiceScreen.jsx for why this is collected after signUp()
-// instead of before it.
-export default function OwnerOnboardingScreen({ onBack, onDone }) {
+// instead of before it. `plan` comes from PlanSelectionScreen, the step
+// before this one in the wizard (see App.jsx).
+export default function OwnerOnboardingScreen({ plan, onBack, onDone }) {
   const [businessName, setBusinessName] = useState('')
   const [ownerName, setOwnerName] = useState('')
   const [trade, setTrade] = useState('Plumbing')
   const [teamSize, setTeamSize] = useState('2-5')
   const [serviceArea, setServiceArea] = useState('')
+  const [googleReviewLink, setGoogleReviewLink] = useState('')
   const { loading, error, run } = usePendingAction()
 
   function submit() {
     run(async () => {
-      await createCompanyAndOwner({ businessName, ownerName, trade, teamSize, serviceArea })
+      await createCompanyAndOwner({ businessName, ownerName, trade, teamSize, serviceArea, plan, googleReviewLink })
+      // Starter is free - no Stripe involved, straight into the dashboard.
+      // A paid plan needs a real Checkout session; if that step itself
+      // fails (e.g. Stripe isn't configured yet), the workspace still
+      // exists - land them in the dashboard anyway rather than stranding
+      // them on this form, with a clear note about what didn't finish.
+      if (planRequiresCheckout(plan)) {
+        try {
+          const url = await createSubscriptionCheckout(plan)
+          window.location.href = url
+          return
+        } catch (err) {
+          window.alert(`Your workspace is ready, but billing setup didn't finish: ${err.message}\n\nYou can subscribe later - for now you're on the app.`)
+        }
+      }
       onDone()
     })
   }
@@ -43,6 +60,13 @@ export default function OwnerOnboardingScreen({ onBack, onDone }) {
 
         <FieldLabel>Service area</FieldLabel>
         <TextInput value={serviceArea} onChange={setServiceArea} placeholder="e.g. Calgary and surrounding areas" />
+
+        <FieldLabel>Google review link (optional)</FieldLabel>
+        <TextInput value={googleReviewLink} onChange={setGoogleReviewLink} placeholder="https://g.page/r/.../review" />
+        <div style={{ fontSize: 11, color: LIGHT.sub, marginTop: -8, marginBottom: 14, lineHeight: 1.4 }}>
+          Used in your automated review-request texts. Find yours in Google
+          Business Profile → "Ask for reviews." You can add this later too.
+        </div>
 
         <ErrorText>{error}</ErrorText>
         <PrimaryButton onClick={submit} disabled={!canSubmit}>
