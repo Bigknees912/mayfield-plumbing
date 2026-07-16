@@ -628,6 +628,67 @@ caller's own `profiles` row.
   Supabase **service role key**, which bypasses RLS (there's no logged-in
   user on a phone call or an anonymous site visitor).
 
+## Multi-tenancy guarantee
+
+Every table that holds tenant data is scoped by `company_id` and RLS-enabled
+— this was true from the very first migration, not bolted on later. What
+migration `027_multitenancy_fk_hardening` (+ `028`, a same-day bugfix)
+added was a deliberate audit pass specifically checking: *can one company
+ever see or corrupt another company's data, even through a bug in the React
+code, not just the intended UI flows?*
+
+**Read isolation** (unchanged, already correct): every `SELECT` policy on
+every table filters by `company_id = current_company_id()` — directly, or
+via a join to a company-scoped parent for the two tables with no
+`company_id` column of their own (`job_status_events` joins through
+`jobs.company_id`; `campaign_enrollments` joins through
+`nurture_campaigns.company_id`). `companies` itself is scoped by
+`id = current_company_id()` instead, since it *is* the tenant. There is no
+table, and no policy, that returns rows across a `company_id` boundary — a
+client can send any query it wants (crafted, buggy, whatever) and Postgres
+still only returns that session's own company's rows, because the
+filtering happens in the database, not the app.
+
+**Write-side gap this closed**: several `INSERT`/`UPDATE` `WITH CHECK`
+clauses validated a row's *own* `company_id` but not that its foreign keys
+(`jobs.customer_id`/`job_type_id`/`assigned_tech_id`/`call_id`,
+`customers.referred_by`, `customer_interactions.customer_id`,
+`campaign_enrollments.customer_id`) pointed at a row in that *same*
+company. This never leaked another company's data (reads were always
+independently re-scoped), but it meant a bug in the app's own dropdowns —
+or a hand-crafted request — could link another company's row id into your
+own data (e.g. a job "assigned" to a tech who doesn't work for you). Fixed
+by adding `exists (select 1 from <referenced table> where id = <fk column>
+and company_id = current_company_id())` to each affected policy's
+`WITH CHECK`. Existing rows are untouched (`WITH CHECK` only applies to the
+row image being written, not retroactively), and the migration confirmed
+zero rows would have violated it (every table was empty at the time).
+
+**Bug caught during this pass, worth knowing about if you write similar
+policies later**: the first version of the `customers.referred_by` check
+self-joined `customers` (aliased `c2`) to validate the referral target, and
+wrote the condition as `c2.id = referred_by`. Because `c2` is itself
+`customers`, the unqualified `referred_by` resolved to `c2.referred_by`
+(the subquery's own column shadows the outer row), not the row being
+inserted — so the check was actually comparing `c2.id = c2.referred_by`
+and would have silently rejected almost every legitimate customer insert
+that set a referral. Fixed one migration later
+(`028_fix_customers_referred_by_check`) by qualifying the outer reference
+explicitly (`customers.referred_by`). **Lesson**: any RLS policy that
+self-joins a table to validate one of its own columns needs the outer
+column reference qualified with the base table name — an unqualified
+column name always resolves to the closest (innermost) matching table in
+scope, not the policy's own row.
+
+**How this was verified** (beyond reading the SQL): a rolled-back
+transactional test (`begin; ... rollback;`, nothing committed) created two
+throwaway companies/owners/customers and confirmed, live, that (a) Owner A
+attempting to create a job pointed at Company B's `customer_id` gets
+rejected with a real `42501 row-level security policy` error, and (b) the
+equivalent same-company operations, including the `referred_by`
+self-reference, succeed normally. `get_advisors` (security + performance)
+was re-run after both migrations and shows no new findings.
+
 ## Not built yet (flagged in the schema, not implemented)
 
 - Job photo attachments / Supabase Storage buckets.
