@@ -18,6 +18,131 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_runs: {
+        Row: {
+          automation_id: string
+          company_id: string
+          created_at: string
+          customer_id: string | null
+          error: string | null
+          executed_at: string | null
+          id: string
+          job_id: string | null
+          scheduled_for: string
+          status: string
+        }
+        Insert: {
+          automation_id: string
+          company_id: string
+          created_at?: string
+          customer_id?: string | null
+          error?: string | null
+          executed_at?: string | null
+          id?: string
+          job_id?: string | null
+          scheduled_for: string
+          status?: string
+        }
+        Update: {
+          automation_id?: string
+          company_id?: string
+          created_at?: string
+          customer_id?: string | null
+          error?: string | null
+          executed_at?: string | null
+          id?: string
+          job_id?: string | null
+          scheduled_for?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_runs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_runs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_runs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automations: {
+        Row: {
+          action_config: Json
+          action_type: string
+          active: boolean
+          company_id: string
+          created_at: string
+          created_by: string | null
+          delay_minutes: number
+          id: string
+          name: string
+          trigger_config: Json
+          trigger_type: string
+        }
+        Insert: {
+          action_config?: Json
+          action_type: string
+          active?: boolean
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          delay_minutes?: number
+          id?: string
+          name: string
+          trigger_config?: Json
+          trigger_type: string
+        }
+        Update: {
+          action_config?: Json
+          action_type?: string
+          active?: boolean
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          delay_minutes?: number
+          id?: string
+          name?: string
+          trigger_config?: Json
+          trigger_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calls: {
         Row: {
           address: string | null
@@ -944,6 +1069,12 @@ export type Database = {
           timezone: string
           trade: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "companies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       current_company_id: { Args: never; Returns: string }
       current_role: { Args: never; Returns: string }
@@ -969,8 +1100,15 @@ export type Database = {
           timezone: string
           trade: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "companies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       regenerate_join_code: { Args: never; Returns: string }
+      run_due_automations: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
@@ -1103,3 +1241,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+</content>

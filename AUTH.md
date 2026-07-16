@@ -62,8 +62,9 @@ wrappers over `supabase.auth.*` and the two RPCs), `src/auth/*.jsx`
 are ported to `src/dashboard/*.jsx`, reading and writing the real tables
 instead of local state. `src/dashboard/AppShell.jsx` replaces the
 placeholder screen in `App.jsx` once a profile exists, and only shows the
-tabs that are wired up (`Home`, `Jobs`, `Calendar`, `Clients` for owners) —
-the demo's Map/Insights/Team/Settings tabs aren't part of this pass.
+tabs that are wired up (`Home`, `Jobs`, `Calendar`, `Clients`, `Automations`
+for owners) — the demo's Map/Insights/Team/Settings tabs aren't part of
+this pass.
 
 Data access lives in `src/lib/jobs.js`, `src/lib/dashboard.js`, and
 `src/lib/timeEntries.js` — plain functions wrapping `supabase.from(...)`
@@ -303,6 +304,18 @@ account already connected for the receptionist.
 
 ## Review-request SMS on job completion
 
+**Superseded by the automation builder below.** The hardcoded trigger
+described in this section was retired in migration
+`024_retire_hardcoded_review_trigger_and_seed_default`, which drops
+`jobs_completed_send_review`/`notify_job_completed()` and seeds an
+equivalent-but-editable `automations` row instead (same message, now with
+a 24-hour delay instead of firing instantly, and the owner can change or
+disable it without a migration). The Edge Function and Vault secret
+described below (`send-review-request`, `job_completed_webhook_secret`)
+are now dead code/unused — left in place rather than deleted, but nothing
+calls them anymore. This section is kept for history; see "Automation
+builder" for the mechanism actually running today.
+
 Real Twilio SMS, fired server-side the instant a job's status becomes
 `'done'` — not triggered by any client code, so it fires reliably
 regardless of which screen (or future path) completes the job. The demo's
@@ -399,6 +412,95 @@ change was needed at all** — the trigger fires on that write regardless.
 **Message sent**: `"Hi {FirstName}, {TechFirstName} from {CompanyName} is
 on the way to {address}. {mapsLink}"`.
 
+## Automation builder
+
+`src/dashboard/AutomationsPage.jsx` (owner-only tab) — GoHighLevel-style
+no-code rules: **when** a trigger fires, **wait** an optional delay, **then**
+run an action. Built as a **form-based builder**, not a visual
+drag-and-drop canvas: a list of rule cards, each created/edited through a
+form (trigger dropdown + config, delay amount/unit, action dropdown +
+config). Same no-code outcome as a node-graph editor, a fraction of the
+engineering effort, and no new UI dependency — this was an explicit scope
+choice (asked and confirmed) over building a canvas library integration.
+
+**Schema** (migration `021_automations_schema`):
+- **`automations`** — one row per rule: `trigger_type`
+  (`job_status_changed` / `pipeline_stage_changed` / `tag_added`) +
+  `trigger_config` (jsonb, e.g. `{"status": "done"}`), `delay_minutes`,
+  `action_type` (`send_sms` / `add_tag` / `change_stage` / `add_note`) +
+  `action_config` (jsonb, e.g. `{"message": "..."}`), `active` toggle.
+  Owner-only read/write via RLS, same `current_role() = 'owner'` pattern as
+  other settings tables.
+- **`automation_runs`** — the delay queue. One row enqueued per matching
+  trigger event, `scheduled_for = now() + delay`, `status`
+  (`pending`/`sent`/`failed`/`cancelled`). This is how a "wait 24 hours"
+  step exists at all — a Postgres trigger can't block/sleep, so instead it
+  enqueues a future row that a scheduled job later picks up and executes.
+
+**Trigger detection** (migration `022_automation_trigger_detection`): two
+`AFTER UPDATE` triggers, `jobs_status_automations` and
+`customers_automations`, each `security definer`. On a matching column
+change (job `status`, customer `pipeline_stage`, or a newly-added
+`customers.tags` entry — diffed via `array_agg(...) where t <> all(old.tags)`),
+they look up every `active` automation with a matching `trigger_type`/
+`trigger_config` for that company and insert an `automation_runs` row
+with `scheduled_for = now() + (delay_minutes || ' minutes')::interval`.
+
+**Loop prevention**: an automation's own action (e.g. `change_stage`) could
+itself match another automation's trigger, cascading indefinitely. Both
+trigger functions check a session-local flag,
+`current_setting('app.automation_processing', true) = 'true'`, and skip
+enqueueing if it's set. `run_due_automations()` (below) sets that flag for
+the duration of its run, so nothing the automation engine does can ever
+enqueue further runs — only real user/API actions can.
+
+**Scheduler** (migration `023_automation_scheduler`): `pg_cron` (installed
+via Supabase's documented pattern —
+`create extension pg_cron with schema pg_catalog; grant usage on schema cron to postgres; ...`,
+not a bare `create extension pg_cron`) runs `run_due_automations()` every
+minute (`cron.schedule('run-due-automations', '* * * * *', ...)`). Each
+run: sets the loop-prevention flag, pulls up to 100 due
+(`status = 'pending' and scheduled_for <= now()`) rows, and for each one
+dispatches on `action_type` — `add_tag`/`change_stage`/`add_note` are
+applied directly in SQL; `send_sms` renders the message (template
+variables substituted via a `replace()` chain) and calls the
+`run-automation-sms` Edge Function through `net.http_post`, authenticated
+with a dedicated Vault secret (`automation_webhook_secret`, generated with
+`gen_random_bytes()` inside Postgres, same reasoning as the SMS secrets
+above — never a literal in migration SQL). Each row is processed in its
+own `begin/exception` block so one failure (e.g. bad phone number) doesn't
+stop the batch — it's marked `status = 'failed'` with the error message
+instead.
+
+**Template variables** available in a `send_sms` message (see
+`SMS_VARIABLES` in `src/lib/automations.js`): `{{first_name}}`, `{{name}}`,
+`{{company_name}}`, `{{job_description}}`, `{{job_address}}`,
+`{{review_link}}`.
+
+**Default automation**: every new company gets one pre-seeded rule on
+signup (`create_company_and_owner`, updated in migration `024`) — "Ask for
+a Google review," `job_status_changed` → `done`, 24-hour delay, `send_sms`
+with the same message the old hardcoded trigger sent. This replaces that
+old trigger (see "Review-request SMS" above) rather than running alongside
+it, so completed jobs aren't double-texted. The owner can edit or disable
+it like any other rule.
+
+**Required Edge Function secret** (Supabase dashboard → Edge Functions →
+Secrets): `run-automation-sms` needs `AUTOMATION_WEBHOOK_SECRET` (get the
+value the same way as the other webhook secrets — SQL Editor, not printed
+here):
+```sql
+select decrypted_secret from vault.decrypted_secrets where name = 'automation_webhook_secret';
+```
+It also needs `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER`,
+shared with the other SMS functions.
+
+**Not built**: `pipeline_stage_changed` and `tag_added` triggers exist at
+the schema/detection level but have no seeded default automations using
+them yet — the form builder supports creating them, just nothing does by
+default. `automation_runs` has no UI (no "view scheduled/sent runs" list)
+— `AutomationsPage` only reads/writes `automations` itself.
+
 ## Signup flow
 
 A new `auth.users` row has no `company_id` or `role` yet, so two RPCs bridge
@@ -471,6 +573,9 @@ caller's own `profiles` row.
 | `invoices` | Auto-generated on job completion. |
 | `subscriptions` | Plan (`starter`/`growth`/`pro`) and Stripe IDs — schema only, no Stripe webhook wired up yet. |
 | `integrations` | Connect-state for Google Calendar / QuickBooks / Slack / Stripe — schema only, no OAuth flows wired up yet. |
+| `customer_interactions` | Notes/call-log timeline entries for a `customers` row. Append-only. |
+| `automations` | No-code trigger → wait → action rules (see "Automation builder"). Owner-only read/write. |
+| `automation_runs` | Delay queue for `automations` — one row per matching trigger event, executed by `run_due_automations()` on a `pg_cron` schedule. Owner-only read. |
 
 ### RLS pattern
 
