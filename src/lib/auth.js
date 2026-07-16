@@ -59,10 +59,14 @@ export async function createCompanyAndOwner({ businessName, ownerName, trade, te
   return data
 }
 
-// Wraps the join_company_as_tech RPC. Surfaces "invalid join code" as a
-// plain error message, same as app-demo.jsx's EmployeeSignup validation.
-export async function joinCompanyAsTech({ joinCode, name }) {
-  const { data, error } = await supabase.rpc('join_company_as_tech', {
+// Wraps the join_company RPC (renamed from join_company_as_tech in
+// migration 042). Surfaces "invalid join code" as a plain error message,
+// same as app-demo.jsx's EmployeeSignup validation. The caller becomes
+// 'owner' if the company has no owner yet (hand-onboarded via the
+// super-admin panel's "add a company" flow) or 'tech' otherwise - the
+// server decides, this client just redeems the code.
+export async function joinCompany({ joinCode, name }) {
+  const { data, error } = await supabase.rpc('join_company', {
     p_join_code: joinCode,
     p_name: name,
   })

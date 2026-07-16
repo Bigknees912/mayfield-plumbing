@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { joinCompanyAsTech } from '../lib/auth'
+import { joinCompany } from '../lib/auth'
 import { AuthShell, BackRow, FieldLabel, TextInput, PrimaryButton, ErrorText, LIGHT, usePendingAction } from './ui'
 
 // Ported from app-demo.jsx's EmployeeSignup, minus the email/password
@@ -16,7 +16,7 @@ export default function EmployeeJoinScreen({ onBack, onDone }) {
     if (!code.trim()) return setError('Enter your company join code.')
     run(async () => {
       try {
-        await joinCompanyAsTech({ joinCode: code, name })
+        await joinCompany({ joinCode: code, name })
         onDone()
       } catch (err) {
         if (err.message.includes('invalid join code')) {

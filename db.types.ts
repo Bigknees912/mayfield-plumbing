@@ -18,6 +18,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json
+          id: string
+          super_admin_id: string
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json
+          id?: string
+          super_admin_id: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          super_admin_id?: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: []
+      }
       automation_runs: {
         Row: {
           automation_id: string
@@ -262,6 +292,7 @@ export type Database = {
           auto_assign_by_zone: boolean
           base_fee: number
           commission_pct: number
+          contact_email: string | null
           created_at: string
           deposit_pct: number
           deposit_threshold: number
@@ -274,6 +305,7 @@ export type Database = {
           notify_emergency_calls: boolean
           sameday_multiplier: number
           service_area: string | null
+          status: string
           team_size_bracket: string | null
           timezone: string
           trade: string
@@ -282,6 +314,7 @@ export type Database = {
           auto_assign_by_zone?: boolean
           base_fee?: number
           commission_pct?: number
+          contact_email?: string | null
           created_at?: string
           deposit_pct?: number
           deposit_threshold?: number
@@ -294,6 +327,7 @@ export type Database = {
           notify_emergency_calls?: boolean
           sameday_multiplier?: number
           service_area?: string | null
+          status?: string
           team_size_bracket?: string | null
           timezone?: string
           trade?: string
@@ -302,6 +336,7 @@ export type Database = {
           auto_assign_by_zone?: boolean
           base_fee?: number
           commission_pct?: number
+          contact_email?: string | null
           created_at?: string
           deposit_pct?: number
           deposit_threshold?: number
@@ -314,6 +349,7 @@ export type Database = {
           notify_emergency_calls?: boolean
           sameday_multiplier?: number
           service_area?: string | null
+          status?: string
           team_size_bracket?: string | null
           timezone?: string
           trade?: string
@@ -944,6 +980,42 @@ export type Database = {
           },
         ]
       }
+      plans: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_order: number
+          features: Json
+          key: string
+          monthly_price: number
+          name: string
+          stripe_price_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_order?: number
+          features?: Json
+          key: string
+          monthly_price?: number
+          name: string
+          stripe_price_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_order?: number
+          features?: Json
+          key?: string
+          monthly_price?: number
+          name?: string
+          stripe_price_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_id: string | null
@@ -984,6 +1056,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      revenue_snapshots: {
+        Row: {
+          breakdown: Json
+          created_at: string
+          snapshot_date: string
+          total_revenue: number
+        }
+        Insert: {
+          breakdown?: Json
+          created_at?: string
+          snapshot_date: string
+          total_revenue: number
+        }
+        Update: {
+          breakdown?: Json
+          created_at?: string
+          snapshot_date?: string
+          total_revenue?: number
+        }
+        Relationships: []
       }
       sms_consent_events: {
         Row: {
@@ -1044,6 +1137,8 @@ export type Database = {
         Row: {
           company_id: string
           current_period_end: string | null
+          override_note: string | null
+          override_price: number | null
           plan: string
           status: string
           stripe_customer_id: string | null
@@ -1052,6 +1147,8 @@ export type Database = {
         Insert: {
           company_id: string
           current_period_end?: string | null
+          override_note?: string | null
+          override_price?: number | null
           plan?: string
           status?: string
           stripe_customer_id?: string | null
@@ -1060,6 +1157,8 @@ export type Database = {
         Update: {
           company_id?: string
           current_period_end?: string | null
+          override_note?: string | null
+          override_price?: number | null
           plan?: string
           status?: string
           stripe_customer_id?: string | null
@@ -1073,7 +1172,32 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "subscriptions_plan_fkey"
+            columns: ["plan"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["key"]
+          },
         ]
+      }
+      super_admins: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       tech_locations: {
         Row: {
@@ -1164,6 +1288,83 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_create_company: {
+        Args: {
+          p_contact_email: string
+          p_name: string
+          p_plan: string
+          p_trade?: string
+        }
+        Returns: Json
+      }
+      admin_delete_plan: { Args: { p_key: string }; Returns: undefined }
+      admin_get_company_detail: {
+        Args: { p_company_id: string }
+        Returns: Json
+      }
+      admin_list_audit_log: {
+        Args: { p_limit?: number }
+        Returns: {
+          action: string
+          created_at: string
+          details: Json
+          id: string
+          super_admin_id: string
+          target_id: string | null
+          target_type: string | null
+        }[]
+      }
+      admin_list_companies: {
+        Args: never
+        Returns: {
+          contact_email: string
+          created_at: string
+          current_period_end: string
+          id: string
+          job_count: number
+          join_code: string
+          name: string
+          plan: string
+          status: string
+          subscription_status: string
+          tech_count: number
+          trade: string
+        }[]
+      }
+      admin_reorder_plans: {
+        Args: { p_ordered_keys: string[] }
+        Returns: undefined
+      }
+      admin_revenue_overview: { Args: never; Returns: Json }
+      admin_set_company_override: {
+        Args: { p_company_id: string; p_note: string; p_override_price: number }
+        Returns: undefined
+      }
+      admin_set_company_status: {
+        Args: { p_company_id: string; p_status: string }
+        Returns: undefined
+      }
+      admin_upsert_plan: {
+        Args: {
+          p_active?: boolean
+          p_display_order?: number
+          p_features: Json
+          p_key: string
+          p_monthly_price: number
+          p_name: string
+        }
+        Returns: {
+          active: boolean
+          created_at: string
+          display_order: number
+          features: Json
+          key: string
+          monthly_price: number
+          name: string
+          stripe_price_id: string | null
+          updated_at: string
+        }
+      }
       anonymize_customer_pii: {
         Args: { p_customer_id: string; p_note?: string }
         Returns: undefined
@@ -1182,6 +1383,7 @@ export type Database = {
           auto_assign_by_zone: boolean
           base_fee: number
           commission_pct: number
+          contact_email: string | null
           created_at: string
           deposit_pct: number
           deposit_threshold: number
@@ -1194,25 +1396,22 @@ export type Database = {
           notify_emergency_calls: boolean
           sameday_multiplier: number
           service_area: string | null
+          status: string
           team_size_bracket: string | null
           timezone: string
           trade: string
         }
-        SetofOptions: {
-          from: "*"
-          to: "companies"
-          isOneToOne: true
-          isSetofReturn: false
-        }
       }
       current_company_id: { Args: never; Returns: string }
       current_role: { Args: never; Returns: string }
-      join_company_as_tech: {
+      is_super_admin: { Args: never; Returns: boolean }
+      join_company: {
         Args: { p_join_code: string; p_name: string }
         Returns: {
           auto_assign_by_zone: boolean
           base_fee: number
           commission_pct: number
+          contact_email: string | null
           created_at: string
           deposit_pct: number
           deposit_threshold: number
@@ -1225,16 +1424,20 @@ export type Database = {
           notify_emergency_calls: boolean
           sameday_multiplier: number
           service_area: string | null
+          status: string
           team_size_bracket: string | null
           timezone: string
           trade: string
         }
-        SetofOptions: {
-          from: "*"
-          to: "companies"
-          isOneToOne: true
-          isSetofReturn: false
+      }
+      log_admin_action: {
+        Args: {
+          p_action: string
+          p_details: Json
+          p_target_id: string
+          p_target_type: string
         }
+        Returns: undefined
       }
       record_sms_consent: {
         Args: {
@@ -1247,6 +1450,7 @@ export type Database = {
       }
       regenerate_join_code: { Args: never; Returns: string }
       run_due_automations: { Args: never; Returns: undefined }
+      take_revenue_snapshot: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
@@ -1379,4 +1583,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-</content>

@@ -1306,15 +1306,18 @@ deploy — this is the mechanism that removes that dependency on memory.
 
 ## Schema reference
 
-All tables are in `public`, RLS-enabled, scoped by `company_id`. Two
+All tables are in `public`, RLS-enabled, scoped by `company_id`. Three
 `SECURITY DEFINER` helper functions back the RLS policies:
-`current_company_id()` and `current_role()`, both resolving from the
-caller's own `profiles` row.
+`current_company_id()` and `current_role()` (resolving from the caller's
+own `profiles` row, and returning `NULL` for `current_company_id()` if
+that company is suspended/cancelled — see "Multi-tenancy guarantee"), and
+`is_super_admin()` (resolving from `super_admins`, entirely separate from
+`profiles` — see "Super-admin panel").
 
 | Table | Purpose |
 |---|---|
-| `companies` | One row per tenant business; also holds pricing/ops settings (base fee, hourly rate, urgency multipliers, deposit rules, commission %, auto-assign/notify toggles) — the Settings page's "Pricing & Revenue" section. |
-| `profiles` | 1:1 with `auth.users`. `role` is `owner` or `tech`. |
+| `companies` | One row per tenant business; also holds pricing/ops settings (base fee, hourly rate, urgency multipliers, deposit rules, commission %, auto-assign/notify toggles) — the Settings page's "Pricing & Revenue" section. `status` (`trial`/`active`/`suspended`/`cancelled`) and `contact_email` are super-admin-managed (see "Super-admin panel"). |
+| `profiles` | 1:1 with `auth.users`. `role` is `owner` or `tech` — never `super_admin`, which is a wholly separate table/identity, see below. |
 | `job_types` | Per-company catalog of job types (drain, faucet, water heater, etc.), each with hours/rate/parts cost. |
 | `customers` | CRM contacts, with referral code + who-referred-whom, SMS consent state (`sms_consent`/`_at`/`_method` — see "SMS consent & compliance"), and `pii_deleted_at` if their personal data has been anonymized (see "Terms of Service, Privacy Policy & data deletion requests"). |
 | `jobs` | Core work orders: status (`unassigned → assigned → in_progress → done`/`cancelled`), assigned tech, urgency, price range, scheduling, and `source` (`manual`/`phone_ai`/`website_lead`). |
@@ -1326,13 +1329,17 @@ caller's own `profiles` row.
 | `feedback` | Post-job sentiment; powers the owner's negative-feedback recovery alert. |
 | `nurture_campaigns` / `campaign_enrollments` | Automated customer follow-up campaigns and who's enrolled. |
 | `invoices` | Auto-generated on job completion. |
-| `subscriptions` | Plan (`starter`/`growth`/`pro`), status (`incomplete`/`active`/`past_due`/`canceled`), and Stripe IDs — kept live by `stripe-webhook` for paid plans (see "Self-serve onboarding & billing"). Nothing in the app gates on this yet. |
+| `subscriptions` | Plan (FK to `plans.key`), status (`incomplete`/`active`/`past_due`/`canceled`), Stripe IDs — kept live by `stripe-webhook` for paid plans (see "Self-serve onboarding & billing") — plus `override_price`/`override_note` for a super-admin-set custom deal price (see "Super-admin panel"). |
 | `integrations` | Connect-state for Google Calendar / QuickBooks / Slack / Stripe — schema only, no OAuth flows wired up yet. |
 | `customer_interactions` | Notes/call-log timeline entries for a `customers` row. Append-only. |
 | `automations` | No-code trigger → wait → action rules (see "Automation builder"). Owner-only read/write. |
 | `automation_runs` | Delay queue for `automations` — one row per matching trigger event, executed by `run_due_automations()` on a `pg_cron` schedule. Owner-only read. |
 | `sms_consent_events` | Append-only audit trail of every SMS consent change (see "SMS consent & compliance"). No update/delete policy — a consent record isn't evidence if it can be edited. |
 | `data_deletion_requests` | Public GDPR/PIPEDA-style access/correction/deletion request intake from a company's marketing site (see "Terms of Service, Privacy Policy & data deletion requests"). Written only by the service role; not scoped to a single company the way every other table is. |
+| `plans` | Platform-wide plan tiers (name, `monthly_price`, `features` jsonb array, `display_order`, `active`) — editable from the super-admin panel, no deploy required. Publicly readable when `active`; `subscriptions.plan` is a foreign key into this table's `key`. |
+| `super_admins` | Platform-operator identities. `id` references `auth.users` but there is **no** `company_id` anywhere on this table or path to one — structurally outside the multi-tenant model (see "Super-admin panel"). |
+| `admin_audit_log` | Append-only log of every super-admin action (who, what, target, timestamp). No insert/update/delete policy for any client role — rows are written only from inside the `admin_*` `SECURITY DEFINER` functions via `log_admin_action()`. |
+| `revenue_snapshots` | One row per day (`snapshot_date` PK), written by a `pg_cron` job (`take_revenue_snapshot()`, nightly) — feeds the super-admin revenue chart with real history instead of a backfill that can't exist for a pre-launch product. |
 
 ### RLS pattern
 
@@ -1413,6 +1420,160 @@ equivalent same-company operations, including the `referred_by`
 self-reference, succeed normally. `get_advisors` (security + performance)
 was re-run after both migrations and shows no new findings.
 
+**Suspension is the same guarantee, reused**: when the super-admin panel
+suspends or cancels a company (see "Super-admin panel"),
+`current_company_id()` was extended to return `NULL` for that company's
+users instead of a real id. Because every company-scoped table's policies
+already key off `company_id = current_company_id()`, this one change
+instantly cuts off that company's access to every table, with no
+per-table edits and no risk of missing one the way the write-side FK gap
+above was missed the first time. Data is untouched — only access stops.
+
+## Super-admin panel
+
+A back-office tool for the platform operator (you) to manage every client
+company on the platform — not a company-facing feature, and not reachable
+by any company's owner or tech account, even by guessing a URL.
+
+### Structural isolation, not just a permission check
+
+`super_admins` is a standalone table (`id → auth.users`, `name`,
+`created_at`) with **no `company_id` column and no path to one**. It's not
+a row in `profiles` with a special role — `profiles.role` still only ever
+allows `'owner'` or `'tech'`. This matters because every RLS policy in the
+app is written in terms of `current_company_id()`/`current_role()`, both
+of which read from `profiles`; a super admin simply has no `profiles` row,
+so those policies never fire for them one way or the other. Admin access
+runs entirely through a separate function, `is_super_admin()`:
+
+```sql
+create function public.is_super_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.super_admins where id = auth.uid())
+$$;
+```
+
+Every `admin_*` RPC (company management, plan/pricing control, revenue,
+audit log) starts with `if not public.is_super_admin() then raise
+exception 'not authorized'; end if;` and is granted to `authenticated`
+(not `anon`) — so an unauthenticated request never even reaches the check,
+and a signed-in owner/tech gets a clean rejection with zero data returned,
+no matter what they call.
+
+### Frontend: a hard fork at the entry point, not a route
+
+`main.jsx` checks `window.location.pathname.startsWith('/admin')` before
+rendering anything and picks between two **completely separate** component
+trees — `App.jsx` (the regular company dashboard, unauthenticated →
+`LoginScreen`) or `admin/SuperAdminApp.jsx` (unauthenticated →
+`admin/AdminLoginScreen.jsx`). There's no shared screen, no shared state
+machine, and no code path that runs both. `SuperAdminApp` does its own
+`supabase.auth.getSession()` check, then calls `is_super_admin()`; only a
+`true` result renders `admin/AdminShell.jsx`. A regular owner signing in
+at `/admin` (same Supabase Auth, since it's one project) just gets a
+"Not authorized" screen — the session is real, but empty of admin rights.
+
+**Deployment note**: since this is a plain pathname check with no server
+framework, whatever static host serves the built app in production must
+be configured to serve `index.html` for unknown paths (the standard SPA
+rewrite) — otherwise `/admin` 404s at the host level before React ever
+runs. `vite dev`/`vite preview` already do this automatically.
+
+**Bootstrapping the first admin account**: there's no seed data and no
+self-serve path to `super_admins` membership — `AdminLoginScreen.jsx` has
+a "create one" option that runs the exact same `supabase.auth.signUp()`
+as the regular app, which only creates an ordinary, privilege-less
+`auth.users` row (harmless even if a stranger finds `/admin` and clicks
+it — they still get "Not authorized" afterward). Granting real access is
+a manual, one-time step: `insert into public.super_admins (id, name)
+select id, 'Your Name' from auth.users where email = 'you@example.com';`
+
+### Company management
+
+- `admin_list_companies()` — every company + its plan/subscription status
+  + live `tech_count`/`job_count`, for the list view.
+- `admin_get_company_detail(company_id)` — one company's full detail:
+  calls handled, jobs booked, technician count, and deposit revenue
+  (`sum(jobs.deposit_amount) where deposit_status = 'paid'`), plus its
+  plan, override price, and join code.
+- `admin_create_company(name, contact_email, plan, trade)` — for hand
+  onboarding: creates the `companies` + `subscriptions` rows and a join
+  code, with **no owner profile yet** (there's no `auth.users` row to
+  attach one to). The join code is handed to the real business owner, who
+  redeems it like any employee would.
+- `admin_set_company_status(company_id, status)` — `trial`/`active`/
+  `suspended`/`cancelled`. Suspending or cancelling a company doesn't
+  touch a single row of its data — see "Multi-tenancy guarantee" below for
+  exactly how access gets cut.
+
+**The join-code rename**: `join_company_as_tech` became `join_company` —
+the first person to redeem a company's join code becomes its `owner`;
+everyone after that becomes `tech`. A self-serve company (via
+`create_company_and_owner`) already has its owner profile inserted before
+any join code exists, so this never lets a tech displace an existing
+owner — it only ever applies to a hand-onboarded company, which starts
+with zero profiles.
+
+### Pricing and plan control
+
+- `plans` (see schema reference) is the single source of truth for tier
+  name/price/features — `src/lib/plans.js`'s `listPlans()` reads it
+  directly for the self-serve `PlanSelectionScreen`, so an admin price or
+  feature-list change takes effect with no deploy.
+- `admin_upsert_plan(key, name, monthly_price, features, display_order,
+  active)` — create or edit a tier. `features` is a plain ordered JSON
+  array of strings; add/remove/reorder in the admin UI just mutates that
+  array and re-saves it, matching the plan editor's actual feature list
+  (there's no deeper feature-gating enforcement elsewhere in the app today
+  — see "Not built yet").
+- `admin_reorder_plans(ordered_keys)` — bulk-sets `display_order`.
+- `admin_delete_plan(key)` — blocked (`raise exception`) if any company is
+  currently subscribed to it; deactivate (`active = false`) instead, which
+  drops it from the signup screen without touching existing subscribers.
+- `admin_set_company_override(company_id, override_price, note)` — a
+  per-company custom price, independent of the standard tiers (early-
+  customer discounts, hand-negotiated deals). `override_price = null`
+  clears it and falls back to the plan's standard price. Every revenue
+  calculation (`admin_revenue_overview`, `take_revenue_snapshot`) uses
+  `coalesce(override_price, plan.monthly_price)`.
+
+### Revenue overview
+
+`admin_revenue_overview()` returns current MRR (sum of
+`coalesce(override_price, monthly_price)` across `active`/`past_due`
+subscriptions at non-suspended companies), a breakdown by plan, the full
+`revenue_snapshots` history for the chart, and every company whose
+subscription is `past_due` (surfaced as a flagged list, not just a number).
+
+`revenue_snapshots` is filled by a `pg_cron` job
+(`take-revenue-snapshot-daily`, 00:05 UTC) calling `take_revenue_snapshot()`
+— same mechanism as `run-due-automations`. A pre-launch product has no
+revenue history to backfill, so the chart starts as a single point on the
+day this shipped and builds real history day by day; the frontend
+(`admin/RevenuePage.jsx`) is a small dependency-free inline SVG line chart
+rather than a charting library, since none was already in `package.json`.
+
+### Audit log
+
+Every `admin_*` mutation ends with `perform public.log_admin_action(...)`,
+which inserts into `admin_audit_log` (super admin id, action, target
+type/id, a `jsonb` details blob, timestamp). There is deliberately **no**
+insert/update/delete grant on that table for any client-facing role —
+`log_admin_action` itself has `execute` revoked from `public`/`anon`/
+`authenticated`, so the only way a row is ever written is from inside
+another `SECURITY DEFINER` admin function, which can't be bypassed from
+the client. `admin_list_audit_log(limit)` is the read path.
+
+**How this was verified**: a rolled-back transactional test (same pattern
+as the multi-tenancy work) created a throwaway super admin, a hand-
+onboarded company via `admin_create_company`, two joiners against its join
+code (confirmed first → `owner`, second → `tech`), a plan upsert, a
+company override, a status change to `suspended`, and confirmed
+`current_company_id()` for that company's now-suspended owner flips from a
+real UUID to `NULL` — plus confirmed a random non-admin authenticated user
+calling `admin_list_companies()` gets rejected with `not authorized`. All
+of it rolled back; nothing was left in the database.
+
 ## Not built yet (flagged in the schema, not implemented)
 
 - Job photo attachments / Supabase Storage buckets.
@@ -1423,3 +1584,12 @@ was re-run after both migrations and shows no new findings.
   exists, `connected` stays `false` until built).
 - Any frontend wiring — `app-demo.jsx` still runs on its in-memory mock
   state; it hasn't been pointed at Supabase yet.
+- Deeper per-feature gating tied to `plans.features` — the admin panel
+  edits the feature list a plan displays, but nothing in the dashboard
+  currently checks "does this company's plan include X" before showing a
+  feature. `plans.features` is display-only today.
+- Stripe `Price` syncing for admin-edited plan prices — `admin_upsert_plan`
+  has a `stripe_price_id` column to fill in, but changing `monthly_price`
+  in the admin panel doesn't push anything to Stripe; a paid plan's actual
+  charge still comes from whatever Stripe Price the `STRIPE_PRICE_GROWTH`/
+  `STRIPE_PRICE_PRO` edge function secrets point at.

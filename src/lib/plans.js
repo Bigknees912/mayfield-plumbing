@@ -1,39 +1,49 @@
 import { supabase } from './supabaseClient'
 
-// Plan metadata for PlanSelectionScreen. The dollar figures below are
-// placeholders - edit them freely, they're just display text. What
-// actually charges a card is the Stripe Price object each plan maps to
-// (STRIPE_PRICE_GROWTH / STRIPE_PRICE_PRO edge function secrets - see
-// AUTH.md "Self-serve onboarding & billing"), so changing a number here
-// does nothing to real billing until the matching Stripe Price is updated
-// too. Keep `key` in sync with subscriptions.plan's check constraint.
-export const PLANS = [
-  {
-    key: 'starter',
-    label: 'Starter',
-    price: 'Free',
-    blurb: 'For a solo operator getting off the ground.',
-    features: ['Up to 2 team members', 'Jobs, calendar & CRM', 'Automations (SMS + email)'],
-  },
-  {
-    key: 'growth',
-    label: 'Growth',
-    price: '$49/mo',
-    blurb: 'For a small crew that needs the AI receptionist and deposits.',
-    features: ['Up to 10 team members', 'Everything in Starter', 'AI phone receptionist', 'Stripe deposit collection'],
-  },
-  {
-    key: 'pro',
-    label: 'Pro',
-    price: '$149/mo',
-    blurb: 'For a growing shop that wants it all.',
-    features: ['Unlimited team members', 'Everything in Growth', 'Priority support'],
-  },
-]
+// Plan tiers (name/price/features) are now data in the `plans` table,
+// editable from the super-admin panel without a deploy - see AUTH.md
+// "Super-admin panel: pricing & plan control". Blurb copy is the one bit
+// that stays hardcoded here, keyed by plan key with a generic fallback:
+// the admin panel only edits name/price/features, matching what was asked
+// for, so a freshly-added tier still renders something reasonable.
+const BLURBS = {
+  starter: 'For a solo operator getting off the ground.',
+  growth: 'For a small crew that needs the AI receptionist and deposits.',
+  pro: 'For a growing shop that wants it all.',
+}
+const DEFAULT_BLURB = 'Everything you need to run your business.'
 
-// Starter has no Stripe Price - it's free, so there's nothing to check out.
-export function planRequiresCheckout(planKey) {
-  return planKey !== 'starter'
+function formatPrice(monthlyPrice) {
+  const n = Number(monthlyPrice) || 0
+  if (n <= 0) return 'Free'
+  return `$${Number.isInteger(n) ? n : n.toFixed(2)}/mo`
+}
+
+// Fetches active plans, ordered by the admin panel's display_order, for
+// PlanSelectionScreen. Replaces the old hardcoded PLANS array.
+export async function listPlans() {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('key, name, monthly_price, features')
+    .eq('active', true)
+    .order('display_order', { ascending: true })
+  if (error) throw error
+  return data.map((p) => ({
+    key: p.key,
+    label: p.name,
+    price: formatPrice(p.monthly_price),
+    blurb: BLURBS[p.key] || DEFAULT_BLURB,
+    features: Array.isArray(p.features) ? p.features : [],
+  }))
+}
+
+// Starter (and any other $0 plan) has no Stripe Price - it's free, so
+// there's nothing to check out. Looks the price up rather than hardcoding
+// a key match, since a super admin could rename/retier plans later.
+export async function planRequiresCheckout(planKey) {
+  const { data, error } = await supabase.from('plans').select('monthly_price').eq('key', planKey).maybeSingle()
+  if (error) throw error
+  return Number(data?.monthly_price) > 0
 }
 
 // Calls create-subscription-checkout and returns the Stripe-hosted

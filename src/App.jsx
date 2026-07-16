@@ -159,7 +159,38 @@ export default function App() {
     )
   }
 
+  if (profile.companies?.status === 'suspended' || profile.companies?.status === 'cancelled') {
+    return <SuspendedScreen onSignOut={signOut} />
+  }
+
   return <AppShell session={session} profile={profile} onSignOut={signOut} />
+}
+
+// Shown instead of the dashboard when the platform operator has suspended
+// or cancelled this company from the super-admin panel. Data isn't
+// deleted - current_company_id() (migration 037) just stops resolving for
+// this company's users, so every RLS-scoped query returns nothing; this
+// screen exists purely so that shows up as a clear message instead of a
+// confusing empty dashboard.
+function SuspendedScreen({ onSignOut }) {
+  return (
+    <AuthShell>
+      <div style={{ paddingTop: 40, textAlign: 'center' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: LIGHT.ink, marginBottom: 10 }}>Account access paused</div>
+        <div style={{ fontSize: 13.5, color: LIGHT.sub, marginBottom: 24, lineHeight: 1.5 }}>
+          Your workspace's access has been paused by Mayfield support. Your data is safe and nothing has been
+          deleted - reach out to support to get this resolved.
+        </div>
+        <button
+          className="tap"
+          onClick={onSignOut}
+          style={{ background: LIGHT.ink, color: '#fff', border: 'none', borderRadius: 10, padding: '11px 22px', fontSize: 14, fontWeight: 600 }}
+        >
+          Sign Out
+        </button>
+      </div>
+    </AuthShell>
+  )
 }
 
 function LoadingScreen() {

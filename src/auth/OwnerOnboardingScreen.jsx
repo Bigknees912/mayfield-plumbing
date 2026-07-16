@@ -25,7 +25,7 @@ export default function OwnerOnboardingScreen({ plan, onBack, onDone }) {
       // fails (e.g. Stripe isn't configured yet), the workspace still
       // exists - land them in the dashboard anyway rather than stranding
       // them on this form, with a clear note about what didn't finish.
-      if (planRequiresCheckout(plan)) {
+      if (await planRequiresCheckout(plan)) {
         try {
           const url = await createSubscriptionCheckout(plan)
           window.location.href = url

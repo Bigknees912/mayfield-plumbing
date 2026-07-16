@@ -2,9 +2,19 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import * as Sentry from '@sentry/react'
 import App from './App.jsx'
+import SuperAdminApp from './admin/SuperAdminApp.jsx'
 import { initSentry } from './lib/sentry'
 
 initSentry()
+
+// /admin is a hard fork at the entry point, not a route inside App.jsx's
+// state machine - it renders a completely separate component tree with
+// its own auth check (SuperAdminApp -> is_super_admin()), so there's no
+// shared state, no shared screen, and no code path that could leak from
+// one into the other. No router is in use elsewhere in this app, so this
+// is a plain pathname check rather than pulling in a routing library for
+// one split.
+const isAdminPath = window.location.pathname.startsWith('/admin')
 
 // Catches render crashes React itself can't recover from (a genuine bug,
 // not a handled API error - those already have their own ErrorState/
@@ -34,7 +44,7 @@ function CrashFallback() {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <Sentry.ErrorBoundary fallback={<CrashFallback />}>
-      <App />
+      {isAdminPath ? <SuperAdminApp /> : <App />}
     </Sentry.ErrorBoundary>
   </React.StrictMode>
 )
