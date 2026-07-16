@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
 import { reportError } from "./_sentry.ts";
+import { mapSubscriptionStatus, periodEndOf } from "./_billing.ts";
 
 // verify_jwt is off (set at deploy time) because Stripe has no Supabase
 // session to send - the Stripe-Signature header verified below IS the
@@ -17,21 +18,6 @@ const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 // handler below bypasses RLS deliberately, same pattern as
 // receptionist-server.
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
-// Stripe subscription statuses don't map 1:1 onto our 4-value
-// subscriptions.status check constraint (incomplete/active/past_due/
-// canceled) - collapse the rest into the closest equivalent.
-function mapSubscriptionStatus(stripeStatus: string): string {
-  if (stripeStatus === "active" || stripeStatus === "trialing") return "active";
-  if (stripeStatus === "past_due" || stripeStatus === "unpaid") return "past_due";
-  if (stripeStatus === "canceled" || stripeStatus === "incomplete_expired" || stripeStatus === "paused") return "canceled";
-  return "incomplete";
-}
-
-function periodEndOf(subscription: Stripe.Subscription): string | null {
-  const raw = (subscription as unknown as { current_period_end?: number }).current_period_end;
-  return raw ? new Date(raw * 1000).toISOString() : null;
-}
 
 // Shared by checkout.session.completed (subscription mode) and
 // customer.subscription.updated/deleted - both carry a Stripe Subscription
@@ -50,7 +36,7 @@ async function syncSubscriptionFromStripe(subscription: Stripe.Subscription) {
     status: mapSubscriptionStatus(subscription.status),
     stripe_customer_id: typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id,
     stripe_subscription_id: subscription.id,
-    current_period_end: periodEndOf(subscription),
+    current_period_end: periodEndOf(subscription as unknown as { current_period_end?: number }),
   };
   if (plan) patch.plan = plan;
 

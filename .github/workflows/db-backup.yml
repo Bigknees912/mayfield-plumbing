@@ -1,0 +1,54 @@
+name: Nightly database backup
+
+# Supplementary to Supabase's own Point-in-Time Recovery (see AUTH.md
+# "Database backups & restore") - this exists so a copy of the data lives
+# somewhere outside Supabase entirely, in case of an account lockout,
+# accidental project deletion, or a provider-side incident, not just
+# provider-side mistakes. PITR is still the primary, faster recovery path
+# for "someone fat-fingered a DELETE five minutes ago" - this is the
+# slower, off-platform fallback for "the whole project is gone."
+#
+# Dumps the `public` schema only (all real app data - jobs, customers,
+# automations, etc). Deliberately does NOT dump `auth`/`storage`/other
+# Supabase-managed schemas - restoring those into a different project
+# fights with Supabase's own internal migrations for them. Recovering
+# actual user accounts relies on Supabase's own backup/PITR instead (see
+# AUTH.md) or, worst case, users re-registering with the same email.
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # 09:00 UTC = 2-3am Calgary, low-traffic
+  workflow_dispatch: {} # lets you trigger one manually from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    # Postgres 17 image so pg_dump's version matches the server's (see
+    # `get_project` result: database.postgres_engine is "17") - an older
+    # client pg_dump can silently produce a dump newer server features
+    # don't round-trip cleanly.
+    container:
+      image: postgres:17
+    steps:
+      - name: Dump the public schema
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not set - see AUTH.md 'Database backups & restore'"
+            exit 1
+          fi
+          mkdir -p backup
+          pg_dump "$SUPABASE_DB_URL" \
+            --schema=public \
+            --format=custom \
+            --no-owner \
+            --no-privileges \
+            --file="backup/mayfield-$(date +%Y-%m-%d).dump"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mayfield-db-backup-${{ github.run_id }}
+          path: backup/*.dump
+          retention-days: 90

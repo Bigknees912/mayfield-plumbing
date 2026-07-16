@@ -1091,6 +1091,219 @@ break anything.
    with nothing auto-assigned — the "new issue" trigger is the one that
    actually matches "tell me the first time this happens."
 
+## Database backups & restore
+
+Two layers, deliberately overlapping: Supabase's own managed backups (the
+primary, fastest recovery path) and a supplementary off-platform dump via
+GitHub Actions (the fallback for "the whole project/account is gone," not
+just "someone fat-fingered a DELETE").
+
+### Layer 1: Supabase's own Point-in-Time Recovery (PITR) — primary
+
+This is the one to reach for first for almost any real incident (bad
+migration, accidental delete, corrupted row) — it's faster and it covers
+every schema, including `auth`.
+
+- **Requires the Pro plan or higher**, plus at least the Small compute
+  add-on. Retention is 7 days on Pro, 30 on Enterprise. If the project is
+  still on the Free plan, there is **no backup/restore safety net at all**
+  right now beyond Layer 2 below — upgrading is the single highest-value
+  thing to do before this project has real customer data in it.
+- **Enable it**: Supabase dashboard → **Database → Backups → Point in
+  Time** → enable the PITR add-on.
+- **Restore**: same page → pick a date/time within the retention window →
+  **Start a restore** → review and confirm. Supabase downloads the latest
+  physical backup, replays WAL up to that exact second, and swaps it in.
+  **The project is inaccessible for the duration** — downtime scales with
+  database size, so this is a "plan for it" operation, not an instant
+  toggle. If anything in the project uses logical replication slots or
+  subscriptions (this app doesn't, beyond what Realtime manages
+  automatically), those need to be dropped before restoring and recreated
+  after.
+
+### Layer 2: nightly `pg_dump` via GitHub Actions — supplementary
+
+`.github/workflows/db-backup.yml` — runs every night (`0 9 * * *` UTC,
+cron `workflow_dispatch` also available for an on-demand run from the
+Actions tab), dumps the `public` schema only (every real app table — jobs,
+customers, automations, etc.) in Postgres custom format, and uploads it as
+a workflow artifact with 90-day retention.
+
+- Uses a `postgres:17` container image specifically so `pg_dump`'s version
+  matches the server's (`get_project` reports `postgres_engine: "17"`) —
+  an older client `pg_dump` can silently mis-handle newer server features.
+- **Deliberately does not dump `auth`/`storage`/other Supabase-managed
+  schemas.** Restoring those into a different project fights Supabase's
+  own internal migrations for them. A full disaster-recovery restore of
+  actual user accounts relies on Layer 1 (PITR) or, as a last resort,
+  users re-registering with the same email — this workflow's job is
+  making sure the actual *business data* survives even if Supabase itself
+  is unreachable, not replacing PITR.
+- **Required secret** (GitHub repo → Settings → Secrets and variables →
+  Actions): `SUPABASE_DB_URL` — the direct Postgres connection string
+  from Supabase dashboard → **Project Settings → Database → Connection
+  string → URI** (use the direct connection, not the pooler in
+  transaction mode — `pg_dump` needs a session-style connection).
+
+**To restore from one of these dumps**:
+1. Go to the workflow run in the **Actions** tab → download the
+   `mayfield-db-backup-<run-id>` artifact → unzip it to get the
+   `.dump` file.
+2. **Strongly recommended: restore into a brand-new, empty Supabase
+   project first** to verify the dump is good before touching anything
+   real — create one via the dashboard (or the `create_project` tool),
+   then:
+   ```sh
+   pg_restore --clean --if-exists --no-owner --no-privileges \
+     -d "<new-project-connection-string>" \
+     mayfield-2026-07-16.dump
+   ```
+3. Once verified, restoring into the *real* project the same way is
+   destructive to whatever's currently there (`--clean` drops existing
+   objects first) — only do this as an actual disaster-recovery step,
+   ideally with Supabase support looped in, not as a routine operation.
+
+## Automated tests (booking & payment flows)
+
+**These were written and manually traced line-by-line against the actual
+implementation, but never executed** — this dev environment has no
+Node.js or Deno installed (consistent with every other piece of code in
+this project; see the top of this file). The first real run will be
+whichever comes first: `.github/workflows/test.yml` on the next push, or
+your own machine. If anything doesn't compile/run cleanly, that's this
+gap surfacing, not a sign the logic itself is wrong — see the manual
+trace notes below for how each test was verified by hand.
+
+### Why these two flows specifically
+
+Booking and payment are the two paths in this app with **no human in the
+loop watching for something to look wrong** — a bad quote or a mis-mapped
+Stripe status doesn't throw an error a rep would notice, it just quietly
+produces a wrong number that only surfaces when a customer complains. That
+combination (silent + consequential) is exactly what automated tests are
+for, and exactly why "basic" here still means testing the actual
+branching logic, not just smoke-testing that a function runs.
+
+### Booking flow — `receptionist-server` (Node's built-in test runner)
+
+No new dependency — `node --test`, part of Node 18+, avoids adding a test
+framework whose exact compatible version I'd otherwise be guessing at
+blind. Run via `npm test` (receptionist-server/package.json → `"test":
+"node --test test/"`).
+
+- **`test/pricing.test.js`** — `calcQuote()` (lib/pricing.js). Locks in
+  concrete dollar amounts (hand-verified against the formula, twice, after
+  I caught my own arithmetic mistakes on the first pass — see below) for
+  a couple of job-type/urgency/property/parts-tier combinations, plus
+  relational invariants across every combination (low < high, urgency
+  strictly increases price, commercial ≥ residential, parts tier
+  ordering), and the two error paths (unknown job type/urgency).
+- **`test/scheduling.test.js`** — `buildCandidates`/`resolveSlot`/
+  `nextAvailableSlots` (lib/scheduling.js). Date-tolerant on purpose (no
+  hardcoded calendar dates, since tests run on whatever day CI happens to
+  run) — checks structural invariants instead: weekday-only candidates,
+  no duplicate windows, a freeform label correctly resolving to `null`
+  instead of throwing, and the slot-conflict filtering (a booked slot gets
+  excluded, a *cancelled* job's old slot doesn't block a new one, another
+  company's booking never blocks this company's availability).
+- **`test/booking.test.js`** — `createBooking()` (lib/booking.js), the
+  actual orchestration: new customer creation, reusing an existing
+  customer matched by phone (no duplicate row), rejecting an
+  already-booked structured slot, *not* rejecting a cancelled job's old
+  slot, a freeform slot skipping the conflict check entirely, SMS consent
+  only ever being recorded when explicitly `true` (never inferred), and
+  picking up urgency/price from an existing `calls` row while marking it
+  `booked`.
+- **`test/fakeSupabase.js`** — a minimal in-memory stand-in for the slice
+  of the supabase-js query-builder API this codebase actually uses
+  (`.from/.select/.insert/.update/.eq/.neq/.in/.single/.maybeSingle`,
+  implemented as a thenable so bare `await supabase.from(...).update(...)`
+  calls with no terminal method still resolve). Not a general-purpose
+  mock — just enough to exercise real branching logic without a live
+  database.
+- **Testability refactor**: `createBooking`, `nextAvailableSlots`, and
+  the helpers they call now accept an optional `supabaseClient` parameter
+  (default: the real client from `getSupabase()`) instead of calling
+  `getSupabase()` internally. Purely additive — every existing call site
+  in `server.js` is unchanged and still gets the real client — but it's
+  what makes the fake-client tests above possible at all.
+
+### Payment flow — Supabase Edge Functions (Deno's built-in test runner)
+
+`deno test`, again zero new dependencies. Run via `deno test
+supabase/functions/create-deposit-checkout/` and `deno test
+supabase/functions/stripe-webhook/`.
+
+- **Testability refactor**: both functions had their pure logic pulled
+  out of `index.ts` into a same-directory module (`_pricing.ts`,
+  `_billing.ts`) specifically because `index.ts` calls `Deno.serve(...)`
+  at the top level — importing it for a test would start a real server as
+  a side effect. The extracted modules have zero Deno API calls and zero
+  Stripe/Supabase dependencies, so importing them for a test is inert.
+- **`create-deposit-checkout/_pricing.test.ts`** — `calcDepositAmount`
+  (must stay in sync with `src/dashboard/JobsBoard.jsx`'s independently-
+  authored `depositAmount()` — nothing but this comment and both sides'
+  tests enforces that, so if you change one, change the other) and
+  `requiresDeposit`'s threshold logic.
+- **`stripe-webhook/_billing.test.ts`** — `mapSubscriptionStatus` across
+  every Stripe status this webhook can actually receive, plus a test that
+  specifically asserts every mapped output is one of the 4 values the
+  `subscriptions.status` check constraint actually allows (a status this
+  function forgot to map would otherwise fail the DB write silently, with
+  only a Sentry report — now at least present — to notice it happened).
+  `periodEndOf`'s unix-seconds-to-ISO-string conversion and its
+  missing-field-returns-null fallback.
+
+**A real bug this pass caught before it shipped**: my first draft of the
+deposit-amount test file had two hand-computed expected values wrong
+(simple arithmetic slips — `Math.round` behavior on a couple of the test
+inputs). Re-deriving each one very deliberately by hand (shown as
+intermediate steps, not just the final number) caught both before they
+were committed as *the assertions this suite would enforce for its own
+first several examples*. That's the sharpest version of "make sure the
+tests themselves aren't wrong" available without an actual runtime to
+execute them against.
+
+**Also caught while redeploying**: smoke-testing the refactored
+`stripe-webhook` after redeploy returned a `500 WORKER_ERROR` on every
+request — including a plain `GET` from a version deployed long before
+today's changes (confirmed via `get_logs`). That rules out today's
+`_billing.ts` extraction as the cause: `stripe-webhook` constructs its
+Stripe client at module top level (`const stripe = new Stripe(...)`,
+outside the request handler), and that throws immediately if
+`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` aren't set as Edge Function
+secrets yet — which, per the existing "One-time Stripe setup" steps under
+"Deposit collection (Stripe)" above, they aren't. **This means the
+deposit/subscription webhook is currently failing on every single
+invocation** — harmless today since no real Stripe traffic is hitting it
+yet, but worth knowing before it matters. It should resolve itself as
+soon as those two secrets are configured; Sentry (now wired in) will
+actually surface it going forward once `SENTRY_DSN` is set too.
+`create-deposit-checkout` was separately confirmed *not* affected (its
+Stripe client is constructed inside the request handler, not at module
+scope) — smoke-tested to a clean `401` post-refactor.
+
+### CI — the part that makes "must never silently break" actually true
+
+`.github/workflows/test.yml` runs both suites on every push and PR to
+`main`. Writing tests without running them automatically would just mean
+a human has to remember to run `npm test`/`deno test` before every
+deploy — this is the mechanism that removes that dependency on memory.
+
+### What's deliberately not covered
+
+- Express routing itself (`server.js`'s request/response wiring) — no
+  `supertest` or similar HTTP-level harness. What's tested is the business
+  logic those routes call, which is where an actual silent-wrong-number
+  bug would live.
+- Real Stripe API calls, real Twilio sends, real Supabase RLS enforcement
+  — those remain covered by the manual verification approach used
+  throughout this project (rolled-back transactional tests via
+  `execute_sql` for anything RLS/DB-policy related), not by this test
+  suite. This suite is specifically for the pure business-logic
+  regressions that a manual one-off SQL check wouldn't catch on every
+  future change.
+
 ## Schema reference
 
 All tables are in `public`, RLS-enabled, scoped by `company_id`. Two

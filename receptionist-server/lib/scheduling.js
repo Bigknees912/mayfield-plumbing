@@ -42,13 +42,16 @@ function buildCandidates(urgency) {
 /**
  * Returns 1-3 candidate slots for the given urgency, filtered against real
  * booked jobs for this company (any non-cancelled job already sitting in
- * that date+window counts as busy).
+ * that date+window counts as busy). `supabaseClient` defaults to the real
+ * client - overridable so test/scheduling.test.js can exercise the
+ * busy-slot filtering against a fake in-memory client instead of a live
+ * database, same reasoning as booking.js's dependency injection.
  */
-async function nextAvailableSlots(urgency, companyId) {
+async function nextAvailableSlots(urgency, companyId, supabaseClient) {
   const candidates = buildCandidates(urgency || "standard");
   if (urgency === "emergency") return candidates.map((c) => c.label);
 
-  const supabase = getSupabase();
+  const supabase = supabaseClient || getSupabase();
   const dates = [...new Set(candidates.map((c) => c.date))];
   const { data: busyJobs, error } = await supabase
     .from("jobs")
@@ -76,4 +79,4 @@ function resolveSlot(label, urgency) {
   return buildCandidates(urgency || "standard").find((c) => c.label === label) || null;
 }
 
-module.exports = { nextAvailableSlots, resolveSlot };
+module.exports = { nextAvailableSlots, resolveSlot, buildCandidates };

@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
 import { reportError } from "./_sentry.ts";
+import { calcDepositAmount, requiresDeposit } from "./_pricing.ts";
 
 // Called from JobsBoard's "Send Deposit Link" button. verify_jwt (set at
 // deploy time) already rejects requests without a valid Supabase session
@@ -55,11 +56,10 @@ Deno.serve(async (req) => {
     if (!job) return json({ error: "job not found" }, 404);
 
     const company = job.companies as unknown as { deposit_threshold: number; deposit_pct: number };
-    if (job.price_high == null || job.price_high < company.deposit_threshold) {
+    if (!requiresDeposit(job.price_high, company.deposit_threshold)) {
       return json({ error: "this job is under the deposit threshold" }, 400);
     }
-    // Same formula as JobsBoard.jsx's depositAmount() - keep in sync if one changes.
-    const depositAmount = Math.round((job.price_high * (company.deposit_pct / 100)) / 5) * 5;
+    const depositAmount = calcDepositAmount(job.price_high, company.deposit_pct);
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!);
     const origin = req.headers.get("origin") || "https://example.com";

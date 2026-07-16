@@ -1,0 +1,41 @@
+name: Tests
+
+# Runs the booking-flow and payment-flow tests on every push/PR - this is
+# the actual mechanism that makes "must never silently break" true: a
+# change that breaks pricing math, slot conflict detection, or Stripe
+# status mapping fails this check instead of reaching production quietly.
+# See AUTH.md "Automated tests (booking & payment flows)".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  receptionist-server:
+    name: Booking flow (receptionist-server)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: receptionist-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm test
+
+  edge-functions:
+    name: Payment flow (Supabase Edge Functions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Test create-deposit-checkout pricing
+        run: deno test supabase/functions/create-deposit-checkout/
+      - name: Test stripe-webhook billing logic
+        run: deno test supabase/functions/stripe-webhook/

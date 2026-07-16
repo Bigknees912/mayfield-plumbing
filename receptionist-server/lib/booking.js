@@ -1,9 +1,15 @@
 const { getSupabase } = require("./supabase");
 const { resolveSlot } = require("./scheduling");
 
-async function getJobType(companyId, key) {
+// Every function below takes its Supabase client as a parameter (default:
+// the real one from getSupabase()) rather than calling getSupabase()
+// internally - this is what lets test/booking.test.js exercise the real
+// branching logic (new vs existing customer, slot conflicts, SMS consent)
+// against a fake in-memory client instead of a live database. Purely a
+// testability refactor - behavior and call sites are unchanged.
+
+async function getJobType(supabase, companyId, key) {
   if (!key) return null;
-  const supabase = getSupabase();
   const { data, error } = await supabase
     .from("job_types")
     .select("id, label")
@@ -22,11 +28,11 @@ async function getJobType(companyId, key) {
  * back up. Never throws - a logging hiccup here shouldn't break a live
  * call's ability to get a price.
  */
-async function recordQuote({ companyId, vapiCallId, customerPhone, jobType, urgency, property, quote }) {
+async function recordQuote({ companyId, vapiCallId, customerPhone, jobType, urgency, property, quote, supabaseClient }) {
   if (!vapiCallId) return;
+  const supabase = supabaseClient || getSupabase();
   try {
-    const supabase = getSupabase();
-    const jobTypeRow = await getJobType(companyId, jobType);
+    const jobTypeRow = await getJobType(supabase, companyId, jobType);
     const patch = {
       company_id: companyId,
       customer_phone: customerPhone || null,
@@ -83,8 +89,8 @@ async function applySmsConsent(supabase, companyId, customerId, smsConsent) {
  * a slot conflict (mirrors the old bookings.json race-guard) so the
  * assistant can offer the next available slot instead.
  */
-async function createBooking({ companyId, vapiCallId, slot, jobType, address, customerPhone, customerName, smsConsent }) {
-  const supabase = getSupabase();
+async function createBooking({ companyId, vapiCallId, slot, jobType, address, customerPhone, customerName, smsConsent, supabaseClient }) {
+  const supabase = supabaseClient || getSupabase();
 
   let call = null;
   if (vapiCallId) {
@@ -138,7 +144,7 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
 
   await applySmsConsent(supabase, companyId, customerId, smsConsent);
 
-  const jobTypeRow = await getJobType(companyId, jobType);
+  const jobTypeRow = await getJobType(supabase, companyId, jobType);
 
   const { data: job, error: jobError } = await supabase
     .from("jobs")
@@ -168,4 +174,4 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
   return { ok: true, job };
 }
 
-module.exports = { recordQuote, createBooking };
+module.exports = { recordQuote, createBooking, applySmsConsent };
