@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { reportError } from "./_sentry.ts";
 
 // Public intake for GDPR/PIPEDA-style privacy requests (access,
 // correction, deletion), called directly from a company's marketing site
@@ -96,11 +97,15 @@ Deno.serve(async (req) => {
 
     return json({ id: request.id, dueDate });
   } catch (err) {
-    console.error(err);
+    await reportError(err, { function: "submit-data-request" });
     return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   }
 });
 
+// A silently-failed notification here isn't just a missed email - it's a
+// legally time-sensitive privacy request (30-day due date) nobody finds
+// out about, so this is one of the highest-value Sentry reports in this
+// app despite the request itself still saving successfully either way.
 async function sendEmail(apiKey: string, from: string, to: string, subject: string, text: string) {
   try {
     const resp = await fetch("https://api.resend.com/emails", {
@@ -108,8 +113,8 @@ async function sendEmail(apiKey: string, from: string, to: string, subject: stri
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from, to: [to], subject, text }),
     });
-    if (!resp.ok) console.error("Resend send failed:", resp.status, await resp.text());
+    if (!resp.ok) await reportError(new Error(`Resend send failed: ${resp.status} ${await resp.text()}`), { function: "submit-data-request", to, subject });
   } catch (err) {
-    console.error("Failed to send notification email:", err instanceof Error ? err.message : err);
+    await reportError(err, { function: "submit-data-request", step: "sendEmail", to, subject });
   }
 }

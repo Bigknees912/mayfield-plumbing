@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
+    "@sentry/react": "^8.45.1",
     "@supabase/supabase-js": "^2.45.4",
     "lucide-react": "^0.454.0",
     "react": "^18.3.1",

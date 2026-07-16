@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { reportError } from "./_sentry.ts";
 
 // Called by the jobs_started_send_on_the_way DB trigger (migration
 // 017_on_the_way_sms_on_job_started) the instant a job's status becomes
@@ -75,14 +76,14 @@ Deno.serve(async (req) => {
 
     if (!twilioResp.ok) {
       const errText = await twilioResp.text();
-      console.error("Twilio send failed:", twilioResp.status, errText);
       await recordOptOutIfApplicable(supabase, customer.id, job.company_id, errText);
+      await reportError(new Error(`Twilio send failed: ${twilioResp.status} ${errText}`), { function: "send-on-the-way-sms", jobId: job.id });
       return json({ sent: false, error: errText }, 502);
     }
 
     return json({ sent: true });
   } catch (err) {
-    console.error(err);
+    await reportError(err, { function: "send-on-the-way-sms" });
     return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   }
 });

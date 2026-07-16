@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { reportError } from "./_sentry.ts";
 
 // Called by run_due_automations() (migration 026_automation_email_channel)
 // once a queued automation_runs row for a send_email action comes due -
@@ -51,13 +52,13 @@ Deno.serve(async (req) => {
 
     if (!resendResp.ok) {
       const errText = await resendResp.text();
-      console.error("Resend send failed:", resendResp.status, errText);
+      await reportError(new Error(`Resend send failed: ${resendResp.status} ${errText}`), { function: "run-automation-email", customerId: customer_id });
       return json({ sent: false, error: errText }, 502);
     }
 
     return json({ sent: true });
   } catch (err) {
-    console.error(err);
+    await reportError(err, { function: "run-automation-email" });
     return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   }
 });

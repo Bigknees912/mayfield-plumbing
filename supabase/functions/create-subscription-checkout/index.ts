@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
+import { reportError } from "./_sentry.ts";
 
 // Called right after create_company_and_owner() during self-serve signup,
 // when the owner picked a paid plan (growth/pro) - starter is free and
@@ -83,7 +84,7 @@ Deno.serve(async (req) => {
 
     return json({ url: session.url });
   } catch (err) {
-    console.error(err);
+    await reportError(err, { function: "create-subscription-checkout" });
     return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   }
 });

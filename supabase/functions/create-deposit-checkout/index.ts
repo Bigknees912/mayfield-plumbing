@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
+import { reportError } from "./_sentry.ts";
 
 // Called from JobsBoard's "Send Deposit Link" button. verify_jwt (set at
 // deploy time) already rejects requests without a valid Supabase session
@@ -94,7 +95,7 @@ Deno.serve(async (req) => {
 
     return json({ url: session.url, amount: depositAmount });
   } catch (err) {
-    console.error(err);
+    await reportError(err, { function: "create-deposit-checkout" });
     return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   }
 });

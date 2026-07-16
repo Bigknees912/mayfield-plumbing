@@ -981,6 +981,116 @@ shows a "personal data deleted on [date]" banner in place of the contact
 info block, and hides the tag editor and SMS consent toggle (nothing left
 to tag or consent about) while keeping the interaction timeline visible.
 
+## Error tracking (Sentry)
+
+Every runtime in this app — the React dashboard, `receptionist-server`,
+and all 8 Supabase Edge Functions — now reports unexpected errors to
+Sentry instead of only writing to a log nobody's watching. Same "code now,
+configure secrets later" pattern as every other integration in this app:
+none of this does anything until you create a Sentry project and set the
+DSN secrets below, but nothing breaks or needs code changes when you do.
+
+### What's covered, and what deliberately isn't
+
+- **Frontend** (`src/lib/sentry.js`, initialized in `src/main.jsx`):
+  Sentry's default browser integrations auto-capture uncaught exceptions
+  and unhandled promise rejections; a new `Sentry.ErrorBoundary` around
+  `<App />` catches render crashes React itself can't recover from, with
+  a plain, dependency-free fallback screen ("Something went wrong...
+  Reload") so a broken render doesn't also break the error screen.
+  **Deliberately not instrumented**: the individual `try/catch` blocks in
+  `usePendingAction`/`useAsyncData` that already show `ErrorBanner`/
+  `ErrorState` — most of what lands there is expected business logic (a
+  bad join code, a job under the deposit threshold, Stripe not configured
+  yet), not a bug. Reporting all of it to Sentry would bury real signal
+  under routine, already-handled user errors. If you want a *specific*
+  handled path reported too (e.g. every failed deposit checkout, not just
+  crashes), add `Sentry.captureException(err)` at that call site — those
+  two hooks are the natural extension points.
+- **`receptionist-server`** (`instrument.js`, loaded first in `server.js`
+  before anything else — required for Sentry's auto-instrumentation of
+  other modules to work): every per-tool-call error in the Vapi webhook
+  handler (`get_quote`/`check_availability`/`book_appointment`) is now
+  reported — this was the most important gap to close, since a failed
+  booking previously just became a vague thing Alex says on the call, with
+  nothing anywhere recording that it happened. `Sentry.setupExpressErrorHandler(app)`
+  is also wired in as a catch-all for anything that escapes that.
+- **Edge Functions**: each of the 8 functions
+  (`create-deposit-checkout`, `create-subscription-checkout`,
+  `stripe-webhook`, `send-on-the-way-sms`, `send-review-request`,
+  `run-automation-sms`, `run-automation-email`, `submit-data-request`)
+  gained a same-directory `_sentry.ts` (content identical across all 8,
+  deliberately duplicated rather than a true shared module - see the
+  file's own comment) exporting `reportError(err, context)`, called from
+  every top-level `catch` block **and** every inline failure path that
+  used to be a bare `console.error` with no other record - e.g. a Twilio
+  send failing (`send-on-the-way-sms`, `run-automation-sms`), a Stripe
+  subscription arriving with no `company_id` in its metadata
+  (`stripe-webhook`), or a privacy-request notification email silently
+  failing to send (`submit-data-request` — arguably the single
+  highest-value report in this app, since that failure mode means a
+  legally time-sensitive 30-day-deadline request goes completely unseen).
+  The Stripe signature-verification failure in `stripe-webhook` is
+  deliberately **not** reported — that's an expected security-boundary
+  rejection (a replay, a misconfigured secret, a scanner probing the
+  endpoint), not a bug.
+
+### The Deno SDK's specific gotchas (why the edge function code looks the way it does)
+
+Per [Supabase's own Sentry integration guide](https://supabase.com/docs/guides/functions/examples/sentry-monitoring):
+- **`defaultIntegrations: false`** is required — the Deno SDK doesn't
+  instrument this runtime, and Edge Function isolates can be reused
+  across unrelated requests, so leaving default integrations on risks
+  breadcrumbs/context leaking between different callers' requests.
+- **`import * as Sentry from "npm:@sentry/deno@^8"`** is the exact
+  specifier Supabase's own docs use — matches this codebase's existing
+  convention of `npm:` specifiers for every other edge function
+  dependency (`npm:stripe@17`, `npm:@supabase/supabase-js@2`).
+- **Every capture needs an explicit `await Sentry.flush(2000)`** (wrapped
+  inside `reportError`) — an Edge Function's isolate terminates
+  immediately after the response is returned, so without a flush, a
+  captured exception may never actually finish sending before the
+  function tears down.
+- **`tracesSampleRate: 0`** everywhere (frontend, backend, edge
+  functions) — this is error tracking only, not full APM/performance
+  monitoring, a deliberate scope decision matching what was actually
+  asked for ("notified when something breaks," not "trace every
+  request"). Turning on performance tracing later is just changing that
+  one number per runtime.
+
+**Verified**: after deploying, two of the updated Edge Functions
+(`run-automation-sms`, `submit-data-request`) were smoke-tested live with
+real `curl` requests and returned their expected `401`/`400` responses
+rather than a boot error — confirming the new `npm:@sentry/deno@^8`
+import resolves correctly at runtime even with no `SENTRY_DSN` set,
+without needing an actual Sentry account to verify the deploy didn't
+break anything.
+
+### One-time setup
+
+1. Create a free account at [sentry.io](https://sentry.io), then create
+   **three projects** (one DSN per runtime — Sentry uses the project to
+   group/route issues, so don't reuse one DSN everywhere): platform
+   "React" for the dashboard, "Express" for `receptionist-server`, and
+   "Deno" (or generic "Node") for the Edge Functions — a single DSN can
+   be reused across all 8 functions.
+2. **Frontend**: add `VITE_SENTRY_DSN` to your `.env` (see
+   `.env.example`) and to your hosting provider's build-time environment
+   variables (Vercel/Netlify/wherever this ends up deployed).
+3. **`receptionist-server`**: add `SENTRY_DSN` to its `.env` / Render
+   environment variables (see `receptionist-server/.env.example`).
+4. **Edge Functions**: Supabase dashboard → Edge Functions → Secrets →
+   add `SENTRY_DSN` once — it's a project-wide secret, so all 8 functions
+   pick it up automatically, no per-function configuration.
+5. **Set up alerts** (this is the actual "notify me immediately" part —
+   Sentry capturing an error and Sentry *telling you* about it are two
+   separate settings): in each Sentry project, **Alerts → Create Alert
+   Rule**, trigger "A new issue is created," action "Send a notification"
+   to email (and/or Slack, if you connect that integration). Sentry's
+   default "someone assigned" style rules won't fire for a solo operator
+   with nothing auto-assigned — the "new issue" trigger is the one that
+   actually matches "tell me the first time this happens."
+
 ## Schema reference
 
 All tables are in `public`, RLS-enabled, scoped by `company_id`. Two

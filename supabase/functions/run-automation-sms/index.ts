@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { reportError } from "./_sentry.ts";
 
 // Called by run_due_automations() (migration 023_automation_scheduler)
 // once a queued automation_runs row for a send_sms action comes due -
@@ -61,14 +62,14 @@ Deno.serve(async (req) => {
 
     if (!twilioResp.ok) {
       const errText = await twilioResp.text();
-      console.error("Twilio send failed:", twilioResp.status, errText);
       await recordOptOutIfApplicable(supabase, customer_id, customer.company_id, errText);
+      await reportError(new Error(`Twilio send failed: ${twilioResp.status} ${errText}`), { function: "run-automation-sms", customerId: customer_id });
       return json({ sent: false, error: errText }, 502);
     }
 
     return json({ sent: true });
   } catch (err) {
-    console.error(err);
+    await reportError(err, { function: "run-automation-sms" });
     return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   }
 });

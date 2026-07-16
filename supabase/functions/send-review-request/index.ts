@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { reportError } from "./_sentry.ts";
 
 // DEAD CODE as of migration 024_retire_hardcoded_review_trigger_and_seed_default:
 // the trigger that used to call this (jobs_completed_send_review) was
@@ -64,14 +65,14 @@ Deno.serve(async (req) => {
 
     if (!twilioResp.ok) {
       const errText = await twilioResp.text();
-      console.error("Twilio send failed:", twilioResp.status, errText);
       await recordOptOutIfApplicable(supabase, customer.id, job.company_id, errText);
+      await reportError(new Error(`Twilio send failed: ${twilioResp.status} ${errText}`), { function: "send-review-request", jobId: job.id });
       return json({ sent: false, error: errText }, 502);
     }
 
     return json({ sent: true });
   } catch (err) {
-    console.error(err);
+    await reportError(err, { function: "send-review-request" });
     return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   }
 });

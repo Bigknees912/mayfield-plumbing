@@ -1,3 +1,4 @@
+const Sentry = require("./instrument"); // must load before anything else - see instrument.js
 const express = require("express");
 const { calcQuote } = require("./lib/pricing");
 const { nextAvailableSlots } = require("./lib/scheduling");
@@ -40,6 +41,10 @@ app.post("/vapi/webhook", checkAuth, async (req, res) => {
         const output = await runTool(toolCall.name, toolCall.arguments || {}, callContext);
         return { toolCallId: toolCall.id, result: JSON.stringify(output) };
       } catch (err) {
+        // Without this, a broken booking/quote just becomes a vague thing
+        // Alex says on the call - nobody finds out until the customer
+        // complains their appointment never actually got scheduled.
+        Sentry.captureException(err, { extra: { toolName: toolCall.name, toolArgs: toolCall.arguments, vapiCallId: callContext.vapiCallId } });
         return { toolCallId: toolCall.id, result: `Error: ${err.message}` };
       }
     })
@@ -99,6 +104,11 @@ async function runTool(name, args, callContext) {
       throw new Error(`Unknown tool: ${name}`);
   }
 }
+
+// Catches anything that escapes the per-tool-call try/catch above (e.g. a
+// throw in checkAuth, or a future route added without its own handling).
+// Must come after every route is defined.
+Sentry.setupExpressErrorHandler(app);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

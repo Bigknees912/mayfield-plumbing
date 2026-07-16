@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@17";
+import { reportError } from "./_sentry.ts";
 
 // verify_jwt is off (set at deploy time) because Stripe has no Supabase
 // session to send - the Stripe-Signature header verified below IS the
@@ -41,7 +42,7 @@ function periodEndOf(subscription: Stripe.Subscription): string | null {
 async function syncSubscriptionFromStripe(subscription: Stripe.Subscription) {
   const companyId = subscription.metadata?.company_id;
   if (!companyId) {
-    console.error("Stripe subscription had no company_id in metadata", subscription.id);
+    await reportError(new Error("Stripe subscription had no company_id in metadata"), { function: "stripe-webhook", subscriptionId: subscription.id });
     return;
   }
   const plan = subscription.metadata?.plan;
@@ -54,7 +55,7 @@ async function syncSubscriptionFromStripe(subscription: Stripe.Subscription) {
   if (plan) patch.plan = plan;
 
   const { error } = await supabase.from("subscriptions").update(patch).eq("company_id", companyId);
-  if (error) console.error("Failed to sync subscription:", error.message);
+  if (error) await reportError(error, { function: "stripe-webhook", step: "sync subscription", companyId });
 }
 
 Deno.serve(async (req) => {
@@ -89,9 +90,9 @@ Deno.serve(async (req) => {
           .update({ deposit_status: "paid", deposit_paid_at: new Date().toISOString() })
           .eq("id", jobId)
           .eq("stripe_checkout_session_id", session.id);
-        if (error) console.error("Failed to mark deposit paid:", error.message);
+        if (error) await reportError(error, { function: "stripe-webhook", step: "mark deposit paid", jobId });
       } else {
-        console.error("checkout.session.completed had no job_id or subscription in metadata", session.id);
+        await reportError(new Error("checkout.session.completed had no job_id or subscription in metadata"), { function: "stripe-webhook", sessionId: session.id });
       }
     }
   } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
