@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { recordSmsConsent } from './smsConsent'
 
 // All reads below are automatically scoped to the caller's company by RLS
 // (jobs_select/customers_select/etc use company_id = current_company_id()),
@@ -85,7 +86,17 @@ export async function listTechLocationsById() {
 // right alongside creating a job for them) - an existing match's stage is
 // never touched, so manually dragging a contact on the Clients pipeline
 // never gets silently overwritten by a later job.
-export async function findOrCreateCustomer({ name, phone, address, pipelineStage = 'booked' }) {
+//
+// `smsConsent` (from the New Job form's consent checkbox) is applied via
+// record_sms_consent AFTER the customer exists/is found, not as part of
+// the insert - this covers both branches uniformly (a brand-new contact,
+// or a returning one whose consent wasn't on file yet) through the same
+// audited code path. It only ever turns consent ON here: leaving the box
+// unchecked just means "no verified consent yet," not "revoke" - real
+// revocation happens via an explicit STOP reply or the Clients page
+// toggle (see AUTH.md "SMS consent & compliance").
+export async function findOrCreateCustomer({ name, phone, address, pipelineStage = 'booked', smsConsent = false }) {
+  let customer
   if (phone) {
     const { data: existing, error: findError } = await supabase
       .from('customers')
@@ -93,15 +104,22 @@ export async function findOrCreateCustomer({ name, phone, address, pipelineStage
       .eq('phone', phone)
       .maybeSingle()
     if (findError) throw findError
-    if (existing) return existing
+    customer = existing || null
   }
-  const { data, error } = await supabase
-    .from('customers')
-    .insert({ name, phone, address, pipeline_stage: pipelineStage })
-    .select()
-    .single()
-  if (error) throw error
-  return data
+  if (!customer) {
+    const { data, error } = await supabase
+      .from('customers')
+      .insert({ name, phone, address, pipeline_stage: pipelineStage })
+      .select()
+      .single()
+    if (error) throw error
+    customer = data
+  }
+  if (smsConsent && !customer.sms_consent) {
+    await recordSmsConsent(customer.id, true, 'web_form', 'Captured on New Job form')
+    customer = { ...customer, sms_consent: true }
+  }
+  return customer
 }
 
 export async function createJob({

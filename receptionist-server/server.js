@@ -89,6 +89,7 @@ async function runTool(name, args, callContext) {
         address: args.address,
         customerPhone: args.customerPhone || callContext.customerPhone,
         customerName: args.customerName,
+        smsConsent: args.smsConsent === true,
       });
       if (!result.ok) return { booked: false, reason: result.reason };
       return { booked: true, slot: args.slot };

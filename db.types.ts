@@ -384,6 +384,9 @@ export type Database = {
           pipeline_stage: string
           referral_code: string | null
           referred_by: string | null
+          sms_consent: boolean
+          sms_consent_at: string | null
+          sms_consent_method: string | null
           tags: string[]
         }
         Insert: {
@@ -397,6 +400,9 @@ export type Database = {
           pipeline_stage?: string
           referral_code?: string | null
           referred_by?: string | null
+          sms_consent?: boolean
+          sms_consent_at?: string | null
+          sms_consent_method?: string | null
           tags?: string[]
         }
         Update: {
@@ -410,6 +416,9 @@ export type Database = {
           pipeline_stage?: string
           referral_code?: string | null
           referred_by?: string | null
+          sms_consent?: boolean
+          sms_consent_at?: string | null
+          sms_consent_method?: string | null
           tags?: string[]
         }
         Relationships: [
@@ -917,6 +926,61 @@ export type Database = {
           },
         ]
       }
+      sms_consent_events: {
+        Row: {
+          company_id: string
+          consent: boolean
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          method: string
+          note: string | null
+        }
+        Insert: {
+          company_id?: string
+          consent: boolean
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          method: string
+          note?: string | null
+        }
+        Update: {
+          company_id?: string
+          consent?: boolean
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          method?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_consent_events_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_consent_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_consent_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           company_id: string
@@ -1044,7 +1108,9 @@ export type Database = {
       create_company_and_owner: {
         Args: {
           p_business_name: string
+          p_google_review_link?: string
           p_owner_name: string
+          p_plan?: string
           p_service_area?: string
           p_team_size?: string
           p_trade?: string
@@ -1106,6 +1172,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      record_sms_consent: {
+        Args: {
+          p_consent: boolean
+          p_customer_id: string
+          p_method: string
+          p_note?: string
+        }
+        Returns: undefined
       }
       regenerate_join_code: { Args: never; Returns: string }
       run_due_automations: { Args: never; Returns: undefined }

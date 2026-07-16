@@ -700,6 +700,151 @@ yourself since it requires a Google Cloud account:
    `LoginScreen`/`SignupScreen` works — same post-auth `RoleChoiceScreen`
    flow as email/password to attach the user to a company.
 
+## SMS consent & compliance
+
+**This is a good-faith technical implementation informed by researched
+TCPA (US), CASL (Canada), and Twilio/CTIA guidance current as of this
+build (July 2026) — it is not legal advice, and hasn't been reviewed by a
+lawyer.** Requirements shift, and how these rules apply to a specific
+business's actual message content is a judgment call a lawyer should make
+before relying on this in production, especially given real penalties on
+both sides of the border (US: **$500–$1,500 statutory damages per
+message**, uncapped; Canada: **up to $10M CAD per violation** for a
+business under CASL). Treat what's below as a solid foundation, not a
+substitute for that review.
+
+**What was researched and why it shaped the design**:
+- **TCPA** treats informational/transactional texts (appointment
+  reminders, status updates — most of what this app sends) as needing
+  only *prior express consent*, which can be oral; *marketing* texts need
+  the higher bar of *prior express written consent*. Since April 2025, the
+  FCC also requires honoring opt-out requests through any reasonable
+  method, not just a STOP reply.
+- **CASL** requires *express or implied* consent for any commercial
+  electronic message, sender identification, and an unsubscribe mechanism
+  — with the burden of proof on the sender to show consent was obtained.
+- **Twilio/CTIA** best practice for opt-in messaging wants clear consent
+  capture, message-frequency and rate disclosure, and STOP/HELP handling.
+  Twilio itself already auto-blocks sends to a number that's replied STOP
+  to a Toll-Free or Long Code number — even without a Messaging Service —
+  returning error code **21610**.
+
+**Design decision — one consent flag, not two tiers**: rather than
+tracking "transactional consent" separately from "marketing consent," this
+app captures a single `sms_consent` per customer, using disclosure
+language that covers the *broader* marketing-level bar. Reasoning: the
+automation builder (see "Automation builder" above) lets an owner write
+completely arbitrary SMS content — a status update today, a promotional
+offer tomorrow — so the schema has no reliable way to classify a given
+message's category at send time. Consenting to the broader category
+covers the narrower one automatically; splitting them would require
+trusting the owner to correctly tag every automation's intent, which isn't
+enforceable.
+
+### Schema (migration `032_sms_consent`)
+
+- **`customers.sms_consent` / `sms_consent_at` / `sms_consent_method`** —
+  current state, checked before every send. `sms_consent_method` is one of
+  `'phone_call'` (captured verbally by the AI receptionist),
+  `'web_form'` (a rep captured it in the dashboard), or
+  `'twilio_opt_out_keyword'` (Twilio told us they replied STOP).
+- **`sms_consent_events`** — append-only audit trail, one row per consent
+  change. This is the actual compliance artifact: CASL puts the burden of
+  proof on the sender to show consent was obtained, so "we have a boolean
+  column" isn't enough on its own — a timestamped history of exactly when,
+  how, and (for dashboard-captured consent) which team member captured or
+  revoked it is what a real audit needs. **No UPDATE or DELETE policy** —
+  stricter than `customer_interactions`' precedent (which allows delete
+  for genuine mistakes), deliberately: a consent record that can be edited
+  or removed after the fact isn't evidence of anything.
+- **`record_sms_consent(p_customer_id, p_consent, p_method, p_note)`** —
+  the only way the frontend changes consent state; updates `customers` and
+  inserts the audit event atomically, and verifies (via `auth.uid()` +
+  `current_company_id()`) that the customer belongs to the caller's own
+  company before touching anything — verified live with a rolled-back
+  transactional test showing a cross-company attempt is rejected with
+  `customer not found`. Owner- or tech-callable (any company member can
+  add a contact), granted to `authenticated` only, revoked from
+  `anon`/`PUBLIC`.
+
+Service-role contexts (`receptionist-server`, and the SMS edge functions'
+own opt-out handling below) write both tables directly instead of calling
+the RPC — they already bypass RLS and have no `auth.uid()` to check
+against, so the RPC's authorization logic doesn't apply to them anyway.
+
+### Where consent gets captured
+
+- **`JobsBoard`'s New Job form** and **`ClientsPage`'s Add Contact form**
+  (`src/dashboard/JobsBoard.jsx`, `ClientsPage.jsx`): a checkbox appears
+  once a phone number is entered — *"Customer consented to receive text
+  messages"* — default **unchecked**. A pre-checked box isn't valid
+  consent under either TCPA or CASL guidance, so this is a deliberate
+  default, not an oversight. The hint text under it is the exact script
+  (`smsConsentScript()` in `src/lib/smsConsent.js`) the rep should have
+  read or conveyed to the customer before checking it — this is an
+  attestation by the rep, not something the customer fills in themselves,
+  since these are owner/tech-facing forms. Checking it calls
+  `record_sms_consent` right after the customer is created/found
+  (`findOrCreateCustomer` in `lib/jobs.js`, `createContact` in
+  `lib/crm.js`) — it only ever turns consent **on** here; leaving the box
+  unchecked means "no verified consent yet," not "revoke."
+- **`ContactDetailModal`**: shows current consent status (green "SMS
+  consent on file" / gray "No SMS consent on file") with a tap-to-toggle —
+  the one place consent can be **revoked** through the dashboard, for when
+  a customer asks not to be texted after the fact. Same optimistic-update-
+  with-revert pattern as the tag editor next to it.
+- **Phone booking (`receptionist-server`)**: Alex (the AI receptionist)
+  now asks a fixed, word-for-word permission question — see the
+  `systemPrompt` in `vapi-assistant.json` — after getting the caller's
+  name and before offering appointment times, on *every* call, including
+  returning customers (re-asking is more friction but never
+  non-compliant; under-asking is the actual risk). The `book_appointment`
+  tool gained an `smsConsent` boolean parameter the assistant sets based
+  on a clear yes; `server.js` forwards it (`args.smsConsent === true`,
+  so anything except an explicit `true` defaults to no consent) into
+  `createBooking()`, which — like the frontend paths — only ever turns
+  consent **on**, never revokes based on a call where it wasn't
+  re-confirmed.
+
+### Enforcement at send time
+
+Every SMS-sending Edge Function (`send-on-the-way-sms`, `run-automation-sms`
+— the two live paths — plus `send-review-request`, which is dead code
+today but was patched too in case it's ever revived) now selects
+`sms_consent` alongside `phone` and skips gracefully
+(`{ skipped: "customer has not consented to SMS" }`) if it's false, the
+exact same pattern already used for "no phone on file." `run-automation-sms`
+additionally appends `"Reply STOP to opt out."` to any message that
+doesn't already mention it — a single choke point that guarantees the
+disclosure regardless of what an owner types into an automation, rather
+than trusting every hand-authored message to include it themselves.
+
+**Closing the loop with Twilio's own opt-out handling**: when a Twilio
+send fails with error code **21610** (recipient previously replied STOP),
+each function now also flips `customers.sms_consent` to `false`
+(`sms_consent_method: 'twilio_opt_out_keyword'`) and logs an
+`sms_consent_events` row, best-effort. Twilio already blocks the send at
+the carrier level regardless of anything this app does — but without this,
+our own `sms_consent` flag would stay stale forever, meaning every future
+automation or trigger would keep trying and keep silently failing against
+a number that's already opted out, and the dashboard would keep showing
+"consent on file" for a customer who explicitly said stop.
+
+### Not built
+
+- No dedicated "consent history" view in the dashboard — `sms_consent_events`
+  exists and is fully populated, but nothing in the UI reads it back yet
+  beyond the current-state toggle in `ContactDetailModal`.
+- The marketing site's lead form still isn't wired to Supabase (see "CRM
+  pipeline" above), so it isn't part of this pass either — when it is,
+  its own consent capture will need the same treatment.
+- No automated handling of non-STOP opt-out channels (email reply, phone
+  call, a support ticket) beyond the manual `ContactDetailModal` toggle —
+  the FCC's April 2025 "any reasonable method" guidance means a rep who
+  hears "please stop texting me" on a call should use that toggle, since
+  there's no automatic detection for anything other than a Twilio STOP
+  reply.
+
 ## Schema reference
 
 All tables are in `public`, RLS-enabled, scoped by `company_id`. Two
@@ -712,7 +857,7 @@ caller's own `profiles` row.
 | `companies` | One row per tenant business; also holds pricing/ops settings (base fee, hourly rate, urgency multipliers, deposit rules, commission %, auto-assign/notify toggles) — the Settings page's "Pricing & Revenue" section. |
 | `profiles` | 1:1 with `auth.users`. `role` is `owner` or `tech`. |
 | `job_types` | Per-company catalog of job types (drain, faucet, water heater, etc.), each with hours/rate/parts cost. |
-| `customers` | CRM contacts, with referral code + who-referred-whom. |
+| `customers` | CRM contacts, with referral code + who-referred-whom, and SMS consent state (`sms_consent`/`_at`/`_method` — see "SMS consent & compliance"). |
 | `jobs` | Core work orders: status (`unassigned → assigned → in_progress → done`/`cancelled`), assigned tech, urgency, price range, scheduling, and `source` (`manual`/`phone_ai`/`website_lead`). |
 | `job_status_events` | Audit trail of status changes, with lat/lng for "checked in, location verified." |
 | `tech_locations` | Latest lat/lng + status (`on_job`/`en_route`/`available`/`offline`) per tech — upsert target for the live map. |
@@ -727,6 +872,7 @@ caller's own `profiles` row.
 | `customer_interactions` | Notes/call-log timeline entries for a `customers` row. Append-only. |
 | `automations` | No-code trigger → wait → action rules (see "Automation builder"). Owner-only read/write. |
 | `automation_runs` | Delay queue for `automations` — one row per matching trigger event, executed by `run_due_automations()` on a `pg_cron` schedule. Owner-only read. |
+| `sms_consent_events` | Append-only audit trail of every SMS consent change (see "SMS consent & compliance"). No update/delete policy — a consent record isn't evidence if it can be edited. |
 
 ### RLS pattern
 

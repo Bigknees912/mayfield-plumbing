@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core'
 import { Plus, X, Phone, Mail } from 'lucide-react'
 import { listContacts, updateContactStage, createContact, PIPELINE_STAGES } from '../lib/crm'
+import { smsConsentScript } from '../lib/smsConsent'
 import { LIGHT } from '../theme'
 import { SectionLabel, LoadingState, ErrorState, ErrorBanner, initialsOf } from './ui'
-import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
+import { FieldLabel, TextInput, Checkbox, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
 import { useAsyncData } from './useAsyncData'
 import { useTableRealtime } from './useTableRealtime'
 import ContactDetailModal from './ContactDetailModal'
@@ -89,6 +90,12 @@ export default function ClientsPage({ company }) {
     setContacts((cs) => cs.map((c) => (c.id === contactId ? { ...c, tags } : c)))
   }
 
+  // Same optimistic-patch pattern as handleTagsChanged, for the SMS
+  // consent toggle in ContactDetailModal.
+  function handleConsentChanged(contactId, smsConsent) {
+    setContacts((cs) => cs.map((c) => (c.id === contactId ? { ...c, sms_consent: smsConsent } : c)))
+  }
+
   if (loading) return <LoadingState />
   if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
 
@@ -127,13 +134,14 @@ export default function ClientsPage({ company }) {
         </DragOverlay>
       </DndContext>
 
-      {addOpen && <AddContactModal onClose={() => setAddOpen(false)} onCreated={handleContactCreated} />}
+      {addOpen && <AddContactModal company={company} onClose={() => setAddOpen(false)} onCreated={handleContactCreated} />}
       {detailContact && (
         <ContactDetailModal
           contact={detailContact}
           allTags={allTags}
           onClose={() => setDetailForId(null)}
           onTagsChanged={handleTagsChanged}
+          onConsentChanged={handleConsentChanged}
         />
       )}
     </>
@@ -214,16 +222,17 @@ function ContactCard({ contact, onOpen }) {
   )
 }
 
-function AddContactModal({ onClose, onCreated }) {
+function AddContactModal({ company, onClose, onCreated }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [address, setAddress] = useState('')
+  const [smsConsent, setSmsConsent] = useState(false)
   const { loading, error, run } = usePendingAction()
 
   function submit() {
     run(async () => {
-      await createContact({ name, phone, email, address })
+      await createContact({ name, phone, email, address, smsConsent })
       await onCreated()
     })
   }
@@ -242,6 +251,14 @@ function AddContactModal({ onClose, onCreated }) {
         <TextInput value={name} onChange={setName} placeholder="Sarah Chen" />
         <FieldLabel>Phone</FieldLabel>
         <TextInput value={phone} onChange={setPhone} placeholder="(403) 555-0119" type="tel" />
+        {phone.trim() && (
+          <Checkbox
+            checked={smsConsent}
+            onChange={setSmsConsent}
+            label="Customer consented to receive text messages"
+            hint={`Only check this if they agreed. Read or convey: ${smsConsentScript(company?.name)}`}
+          />
+        )}
         <FieldLabel>Email</FieldLabel>
         <TextInput value={email} onChange={setEmail} placeholder="sarah@example.com" type="email" />
         <FieldLabel>Address</FieldLabel>

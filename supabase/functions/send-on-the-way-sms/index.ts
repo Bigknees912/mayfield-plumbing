@@ -12,6 +12,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // not real-time GPS tracking of the tech. There's no location pipeline
 // (tech_locations has no GPS source wired up), so this doesn't pretend to
 // show where the tech actually is, only where they're headed.
+//
+// SMS consent gate (migration 032_sms_consent, see AUTH.md "SMS consent &
+// compliance"): skips gracefully - same as the existing "no phone on
+// file" check - if the customer hasn't consented. If Twilio reports the
+// number opted out via STOP (error 21610), that's synced back to our own
+// customers.sms_consent so later attempts short-circuit here instead of
+// hitting Twilio again.
 
 Deno.serve(async (req) => {
   try {
@@ -27,7 +34,7 @@ Deno.serve(async (req) => {
 
     const { data: job, error: jobError } = await supabase
       .from("jobs")
-      .select("id, status, address, customers(name, phone), companies(name), assigned_tech:profiles!jobs_assigned_tech_id_fkey(name)")
+      .select("id, status, address, company_id, customers(id, name, phone, sms_consent), companies(name), assigned_tech:profiles!jobs_assigned_tech_id_fkey(name)")
       .eq("id", job_id)
       .maybeSingle();
     if (jobError) throw jobError;
@@ -36,7 +43,7 @@ Deno.serve(async (req) => {
       return json({ skipped: "job not found or not in_progress" });
     }
 
-    const customer = job.customers as unknown as { name: string; phone: string | null } | null;
+    const customer = job.customers as unknown as { id: string; name: string; phone: string | null; sms_consent: boolean } | null;
     const company = job.companies as unknown as { name: string };
     const tech = job.assigned_tech as unknown as { name: string } | null;
 
@@ -44,11 +51,14 @@ Deno.serve(async (req) => {
     if (!toNumber) {
       return json({ skipped: "no usable phone number on file for this customer" });
     }
+    if (!customer?.sms_consent) {
+      return json({ skipped: "customer has not consented to SMS" });
+    }
 
-    const firstName = customer!.name?.trim().split(/\s+/)[0] || "there";
+    const firstName = customer.name?.trim().split(/\s+/)[0] || "there";
     const techFirstName = tech?.name?.trim().split(/\s+/)[0] || "Your technician";
     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(job.address)}`;
-    const message = `Hi ${firstName}, ${techFirstName} from ${company.name} is on the way to ${job.address}. ${mapsLink}`;
+    const message = `Hi ${firstName}, ${techFirstName} from ${company.name} is on the way to ${job.address}. ${mapsLink} Reply STOP to opt out.`;
 
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
@@ -66,6 +76,7 @@ Deno.serve(async (req) => {
     if (!twilioResp.ok) {
       const errText = await twilioResp.text();
       console.error("Twilio send failed:", twilioResp.status, errText);
+      await recordOptOutIfApplicable(supabase, customer.id, job.company_id, errText);
       return json({ sent: false, error: errText }, 502);
     }
 
@@ -86,6 +97,38 @@ function toE164(raw: string): string | null {
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
   return null;
+}
+
+// Twilio error 21610 means the recipient has previously replied STOP -
+// Twilio already blocks the send at the carrier level regardless of what
+// we do here, but without this our own sms_consent flag would stay stale
+// (true) forever, so every future automation/trigger would keep trying
+// and keep failing silently. Best-effort: a failure here shouldn't shadow
+// the original Twilio error already being returned to the caller.
+async function recordOptOutIfApplicable(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  customerId: string,
+  companyId: string,
+  twilioErrText: string
+) {
+  try {
+    const parsed = JSON.parse(twilioErrText);
+    if (parsed?.code !== 21610) return;
+    await supabase
+      .from("customers")
+      .update({ sms_consent: false, sms_consent_at: new Date().toISOString(), sms_consent_method: "twilio_opt_out_keyword" })
+      .eq("id", customerId);
+    await supabase.from("sms_consent_events").insert({
+      company_id: companyId,
+      customer_id: customerId,
+      consent: false,
+      method: "twilio_opt_out_keyword",
+      note: "Twilio blocked send: recipient previously replied STOP (error 21610)",
+    });
+  } catch (err) {
+    console.error("Failed to record opt-out from Twilio 21610:", err instanceof Error ? err.message : err);
+  }
 }
 
 function json(body: unknown, status = 200) {

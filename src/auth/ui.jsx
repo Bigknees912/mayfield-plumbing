@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Check } from 'lucide-react'
 import { LIGHT, GlobalStyle } from '../theme'
 
 // Ported from app-demo.jsx's LIGHT palette and auth-screen building blocks,
@@ -65,6 +65,24 @@ export function ChipRow({ options, value, onChange }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// Plain checkbox + label, used wherever SMS consent (or any other
+// yes/no attestation) needs capturing - see ../lib/smsConsent.js. Default-
+// unchecked by design: consent capture must be an affirmative action, a
+// pre-checked box isn't valid consent under TCPA/CASL guidance.
+export function Checkbox({ checked, onChange, label, hint }) {
+  return (
+    <div className="tap" onClick={() => onChange(!checked)} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14, cursor: 'pointer' }}>
+      <div style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${checked ? LIGHT.accent : LIGHT.border}`, background: checked ? LIGHT.accent : '#F5F5F7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+        {checked && <Check size={12} color="#fff" strokeWidth={3} />}
+      </div>
+      <div>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: LIGHT.ink, lineHeight: 1.4 }}>{label}</div>
+        {hint && <div style={{ fontSize: 10.5, color: LIGHT.sub, lineHeight: 1.4, marginTop: 2 }}>{hint}</div>}
+      </div>
     </div>
   )
 }

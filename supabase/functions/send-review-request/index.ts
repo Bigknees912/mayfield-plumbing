@@ -1,11 +1,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-// Called by the jobs_completed_send_review DB trigger (migration
-// 015_review_request_on_job_complete) the instant a job's status becomes
-// 'done' - not by any client directly. verify_jwt is off (set at deploy
-// time) because the trigger has no Supabase user session; the
-// x-webhook-secret header checked below IS the authentication, matching
-// the shared secret stored in Vault that the trigger sends.
+// DEAD CODE as of migration 024_retire_hardcoded_review_trigger_and_seed_default:
+// the trigger that used to call this (jobs_completed_send_review) was
+// dropped and replaced by a seeded row in the `automations` table, which
+// runs through run-automation-sms instead - see AUTH.md "Review-request
+// SMS on job completion" (superseded) and "Automation builder". Nothing
+// calls this function anymore. Left in place rather than deleted, but
+// patched for the SMS consent gate below anyway (migration 032) in case
+// it's ever manually re-wired without remembering that constraint.
 
 Deno.serve(async (req) => {
   try {
@@ -21,7 +23,7 @@ Deno.serve(async (req) => {
 
     const { data: job, error: jobError } = await supabase
       .from("jobs")
-      .select("id, status, customers(name, phone), companies(name, google_review_link)")
+      .select("id, status, company_id, customers(id, name, phone, sms_consent), companies(name, google_review_link)")
       .eq("id", job_id)
       .maybeSingle();
     if (jobError) throw jobError;
@@ -30,7 +32,7 @@ Deno.serve(async (req) => {
       return json({ skipped: "job not found or not done" });
     }
 
-    const customer = job.customers as unknown as { name: string; phone: string | null } | null;
+    const customer = job.customers as unknown as { id: string; name: string; phone: string | null; sms_consent: boolean } | null;
     const company = job.companies as unknown as { name: string; google_review_link: string | null };
 
     if (!company.google_review_link) {
@@ -40,9 +42,12 @@ Deno.serve(async (req) => {
     if (!toNumber) {
       return json({ skipped: "no usable phone number on file for this customer" });
     }
+    if (!customer?.sms_consent) {
+      return json({ skipped: "customer has not consented to SMS" });
+    }
 
-    const firstName = customer!.name?.trim().split(/\s+/)[0] || "there";
-    const message = `Hi ${firstName}, thanks for choosing ${company.name}! If you have a minute, a quick Google review helps us a lot: ${company.google_review_link}`;
+    const firstName = customer.name?.trim().split(/\s+/)[0] || "there";
+    const message = `Hi ${firstName}, thanks for choosing ${company.name}! If you have a minute, a quick Google review helps us a lot: ${company.google_review_link} Reply STOP to opt out.`;
 
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
@@ -60,6 +65,7 @@ Deno.serve(async (req) => {
     if (!twilioResp.ok) {
       const errText = await twilioResp.text();
       console.error("Twilio send failed:", twilioResp.status, errText);
+      await recordOptOutIfApplicable(supabase, customer.id, job.company_id, errText);
       return json({ sent: false, error: errText }, 502);
     }
 
@@ -80,6 +86,35 @@ function toE164(raw: string): string | null {
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
   return null;
+}
+
+// Twilio error 21610 means the recipient has previously replied STOP -
+// see the identical helper in send-on-the-way-sms/run-automation-sms for
+// the full rationale.
+async function recordOptOutIfApplicable(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  customerId: string,
+  companyId: string,
+  twilioErrText: string
+) {
+  try {
+    const parsed = JSON.parse(twilioErrText);
+    if (parsed?.code !== 21610) return;
+    await supabase
+      .from("customers")
+      .update({ sms_consent: false, sms_consent_at: new Date().toISOString(), sms_consent_method: "twilio_opt_out_keyword" })
+      .eq("id", customerId);
+    await supabase.from("sms_consent_events").insert({
+      company_id: companyId,
+      customer_id: customerId,
+      consent: false,
+      method: "twilio_opt_out_keyword",
+      note: "Twilio blocked send: recipient previously replied STOP (error 21610)",
+    });
+  } catch (err) {
+    console.error("Failed to record opt-out from Twilio 21610:", err instanceof Error ? err.message : err);
+  }
 }
 
 function json(body: unknown, status = 200) {

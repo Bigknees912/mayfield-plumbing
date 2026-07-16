@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { X, Phone, Mail, MapPin, StickyNote, PhoneCall } from 'lucide-react'
-import { listInteractions, addInteraction, updateContactTags, PIPELINE_STAGES } from '../lib/crm'
+import { X, Phone, Mail, MapPin, StickyNote, PhoneCall, MessageCircle, MessageCircleOff } from 'lucide-react'
+import { listInteractions, addInteraction, updateContactTags, updateContactConsent, PIPELINE_STAGES } from '../lib/crm'
 import { LIGHT } from '../theme'
 import { initialsOf, LoadingState, ErrorState, ErrorBanner } from './ui'
 import { FieldLabel, ErrorText, usePendingAction } from '../auth/ui'
@@ -13,11 +13,14 @@ function formatWhen(iso) {
 // Opened by clicking a card on the pipeline board (see ClientsPage.jsx).
 // Two things live here that the compact card can't show: the tag editor
 // and the interaction timeline (view + add note/log call).
-export default function ContactDetailModal({ contact, allTags, onClose, onTagsChanged }) {
+export default function ContactDetailModal({ contact, allTags, onClose, onTagsChanged, onConsentChanged }) {
   const [interactions, setInteractions] = useState([])
   const [tags, setTags] = useState(contact.tags || [])
   const [tagInput, setTagInput] = useState('')
   const [tagError, setTagError] = useState('')
+  const [smsConsent, setSmsConsent] = useState(contact.sms_consent ?? false)
+  const [consentSaving, setConsentSaving] = useState(false)
+  const [consentError, setConsentError] = useState('')
   const [composerType, setComposerType] = useState('note')
   const [composerBody, setComposerBody] = useState('')
   const { loading: posting, error: postError, run: runPost } = usePendingAction()
@@ -49,6 +52,26 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
   }
   function removeTag(t) {
     saveTags(tags.filter((x) => x !== t))
+  }
+
+  // Bidirectional, unlike the creation-time consent checkboxes (JobsBoard/
+  // ClientsPage) which only ever turn consent on - this is the one place a
+  // rep can revoke it too, e.g. if the customer asks not to be texted.
+  async function toggleConsent() {
+    const next = !smsConsent
+    const prev = smsConsent
+    setSmsConsent(next) // optimistic
+    setConsentSaving(true)
+    setConsentError('')
+    try {
+      await updateContactConsent(contact.id, next)
+      onConsentChanged(contact.id, next)
+    } catch (err) {
+      setSmsConsent(prev)
+      setConsentError(err.message)
+    } finally {
+      setConsentSaving(false)
+    }
   }
 
   function submitInteraction() {
@@ -87,6 +110,27 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
           {contact.address && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: LIGHT.ink }}><MapPin size={13} color={LIGHT.accent} /> {contact.address}</div>}
           {!contact.phone && !contact.email && !contact.address && <div style={{ fontSize: 12, color: LIGHT.sub }}>No contact details on file.</div>}
         </div>
+
+        {contact.phone && (
+          <>
+            <div
+              className="tap"
+              onClick={consentSaving ? undefined : toggleConsent}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, background: smsConsent ? LIGHT.successSoft : LIGHT.bg, borderRadius: 14, padding: 12, marginBottom: 8, opacity: consentSaving ? 0.6 : 1 }}
+            >
+              {smsConsent ? <MessageCircle size={16} color={LIGHT.success} /> : <MessageCircleOff size={16} color={LIGHT.sub} />}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: smsConsent ? LIGHT.success : LIGHT.ink }}>
+                  {smsConsent ? 'SMS consent on file' : 'No SMS consent on file'}
+                </div>
+                <div style={{ fontSize: 10.5, color: LIGHT.sub }}>
+                  {smsConsent ? 'Tap to revoke — no more automated texts will send.' : 'Tap only if the customer has agreed to receive texts.'}
+                </div>
+              </div>
+            </div>
+            <ErrorText>{consentError}</ErrorText>
+          </>
+        )}
 
         <FieldLabel>Tags</FieldLabel>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>

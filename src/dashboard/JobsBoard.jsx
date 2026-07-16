@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { CheckCircle2, DollarSign, Plus, X, Route, Copy, ExternalLink } from 'lucide-react'
 import { listJobs, listJobTypes, listTeamTechs, listTechLocationsById, assignJob, findOrCreateCustomer, createJob, distanceKm } from '../lib/jobs'
 import { createDepositCheckout } from '../lib/deposits'
+import { smsConsentScript } from '../lib/smsConsent'
 import { LIGHT } from '../theme'
 import { SectionLabel, Badge, LoadingState, ErrorState, ErrorBanner, EmptyState, money, initialsOf, STATUS_META } from './ui'
-import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
+import { FieldLabel, TextInput, Checkbox, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
 import { useJobsRealtime } from './useJobsRealtime'
 import { useAsyncData } from './useAsyncData'
 
@@ -178,6 +179,7 @@ export default function JobsBoard({ company }) {
       {newJobOpen && (
         <NewJobModal
           jobTypes={jobTypes}
+          company={company}
           onClose={() => setNewJobOpen(false)}
           onCreated={handleJobCreated}
         />
@@ -259,7 +261,7 @@ function AssignPicker({ job, techs, techLocations, assigning, onAssign, onClose 
   )
 }
 
-function NewJobModal({ jobTypes, onClose, onCreated }) {
+function NewJobModal({ jobTypes, company, onClose, onCreated }) {
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [address, setAddress] = useState('')
@@ -269,11 +271,12 @@ function NewJobModal({ jobTypes, onClose, onCreated }) {
   const [priceHigh, setPriceHigh] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledWindow, setScheduledWindow] = useState('')
+  const [smsConsent, setSmsConsent] = useState(false)
   const { loading, error, run } = usePendingAction()
 
   function submit() {
     run(async () => {
-      const customer = await findOrCreateCustomer({ name: customerName, phone: customerPhone, address })
+      const customer = await findOrCreateCustomer({ name: customerName, phone: customerPhone, address, smsConsent })
       const jobType = jobTypes.find((jt) => jt.id === jobTypeId)
       await createJob({
         customerId: customer.id,
@@ -304,6 +307,14 @@ function NewJobModal({ jobTypes, onClose, onCreated }) {
         <TextInput value={customerName} onChange={setCustomerName} placeholder="Sarah Chen" />
         <FieldLabel>Customer phone</FieldLabel>
         <TextInput value={customerPhone} onChange={setCustomerPhone} placeholder="(403) 555-0119" type="tel" />
+        {customerPhone.trim() && (
+          <Checkbox
+            checked={smsConsent}
+            onChange={setSmsConsent}
+            label="Customer consented to receive text messages"
+            hint={`Only check this if they agreed. Read or convey: ${smsConsentScript(company?.name)}`}
+          />
+        )}
         <FieldLabel>Job address</FieldLabel>
         <TextInput value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
 

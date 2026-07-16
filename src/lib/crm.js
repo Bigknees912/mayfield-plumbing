@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { recordSmsConsent } from './smsConsent'
 
 // Mirrors customers.pipeline_stage's check constraint (migration
 // 018_customers_pipeline_stage). Order here is the left-to-right column
@@ -30,19 +31,34 @@ export async function updateContactStage(customerId, stage) {
   if (error) throw error
 }
 
-export async function createContact({ name, phone, email, address }) {
+// `smsConsent` (Add Contact form's consent checkbox) is applied via
+// record_sms_consent after the insert, same reasoning as
+// findOrCreateCustomer in lib/jobs.js - one audited code path either way.
+export async function createContact({ name, phone, email, address, smsConsent = false }) {
   const { data, error } = await supabase
     .from('customers')
     .insert({ name, phone: phone || null, email: email || null, address: address || null, pipeline_stage: 'new_lead' })
     .select()
     .single()
   if (error) throw error
+  if (smsConsent) {
+    await recordSmsConsent(data.id, true, 'web_form', 'Captured on Add Contact form')
+    return { ...data, sms_consent: true }
+  }
   return data
 }
 
 export async function updateContactTags(customerId, tags) {
   const { error } = await supabase.from('customers').update({ tags }).eq('id', customerId)
   if (error) throw error
+}
+
+// Toggle from ContactDetailModal - unlike the creation-time paths above,
+// this can go either direction (a rep can flip it back off if a customer
+// asks not to be texted), so it always calls record_sms_consent directly
+// rather than only-ever-turning-on.
+export async function updateContactConsent(customerId, consent) {
+  await recordSmsConsent(customerId, consent, 'web_form', consent ? 'Set from contact detail' : 'Revoked from contact detail')
 }
 
 // Append-only interaction timeline (customer_interactions has no update

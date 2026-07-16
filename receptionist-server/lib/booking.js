@@ -49,12 +49,41 @@ async function recordQuote({ companyId, vapiCallId, customerPhone, jobType, urge
 }
 
 /**
+ * Records SMS consent Alex captured verbally during the call, per the
+ * exact permission-question script in vapi-assistant.json's systemPrompt.
+ * Only ever turns consent ON, mirroring the dashboard app's
+ * findOrCreateCustomer (src/lib/jobs.js) - a caller who doesn't clearly
+ * confirm this time isn't treated as revoking consent they gave on a
+ * previous call, since the assistant not asking clearly isn't the same as
+ * the customer saying no. Real revocation happens via an explicit STOP
+ * reply (handled in the SMS-sending edge functions) or the dashboard's
+ * Clients page toggle. See AUTH.md "SMS consent & compliance".
+ */
+async function applySmsConsent(supabase, companyId, customerId, smsConsent) {
+  if (!smsConsent) return;
+  const { error: updateError } = await supabase
+    .from("customers")
+    .update({ sms_consent: true, sms_consent_at: new Date().toISOString(), sms_consent_method: "phone_call" })
+    .eq("id", customerId);
+  if (updateError) throw updateError;
+
+  const { error: eventError } = await supabase.from("sms_consent_events").insert({
+    company_id: companyId,
+    customer_id: customerId,
+    consent: true,
+    method: "phone_call",
+    note: "Captured verbally during phone booking (Alex)",
+  });
+  if (eventError) throw eventError;
+}
+
+/**
  * Creates the real booking: finds/creates the customer, inserts the job,
  * and marks the call's outcome "booked". Returns { ok: false, reason } on
  * a slot conflict (mirrors the old bookings.json race-guard) so the
  * assistant can offer the next available slot instead.
  */
-async function createBooking({ companyId, vapiCallId, slot, jobType, address, customerPhone, customerName }) {
+async function createBooking({ companyId, vapiCallId, slot, jobType, address, customerPhone, customerName, smsConsent }) {
   const supabase = getSupabase();
 
   let call = null;
@@ -106,6 +135,8 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
     if (createError) throw createError;
     customerId = created.id;
   }
+
+  await applySmsConsent(supabase, companyId, customerId, smsConsent);
 
   const jobTypeRow = await getJobType(companyId, jobType);
 

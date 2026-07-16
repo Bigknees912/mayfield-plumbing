@@ -8,6 +8,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // matching the shared secret stored in Vault. The message has already
 // been fully rendered (template variables substituted) by the caller -
 // this function only needs a phone number and a string to send.
+//
+// SMS consent gate (migration 032_sms_consent, see AUTH.md "SMS consent &
+// compliance"): skips gracefully - same as the existing "no phone on
+// file" check - if the customer hasn't consented. This is the single
+// choke point for every owner-authored send_sms automation (including the
+// seeded review-request one), so a STOP-opt-out footer is appended here
+// unconditionally rather than trusting every automation's hand-typed
+// message to include it.
 
 Deno.serve(async (req) => {
   try {
@@ -23,7 +31,7 @@ Deno.serve(async (req) => {
 
     const { data: customer, error: customerError } = await supabase
       .from("customers")
-      .select("phone")
+      .select("phone, sms_consent, company_id")
       .eq("id", customer_id)
       .maybeSingle();
     if (customerError) throw customerError;
@@ -32,6 +40,11 @@ Deno.serve(async (req) => {
     if (!toNumber) {
       return json({ skipped: "no usable phone number on file for this customer" });
     }
+    if (!customer?.sms_consent) {
+      return json({ skipped: "customer has not consented to SMS" });
+    }
+
+    const fullMessage = /reply stop/i.test(message) ? message : `${message} Reply STOP to opt out.`;
 
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
     const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
@@ -43,12 +56,13 @@ Deno.serve(async (req) => {
         Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({ To: toNumber, From: fromNumber, Body: message }),
+      body: new URLSearchParams({ To: toNumber, From: fromNumber, Body: fullMessage }),
     });
 
     if (!twilioResp.ok) {
       const errText = await twilioResp.text();
       console.error("Twilio send failed:", twilioResp.status, errText);
+      await recordOptOutIfApplicable(supabase, customer_id, customer.company_id, errText);
       return json({ sent: false, error: errText }, 502);
     }
 
@@ -68,6 +82,38 @@ function toE164(raw: string): string | null {
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
   return null;
+}
+
+// Twilio error 21610 means the recipient has previously replied STOP -
+// Twilio already blocks the send at the carrier level regardless of what
+// we do here, but without this our own sms_consent flag would stay stale
+// (true) forever, so every future automation would keep trying and keep
+// failing silently. Best-effort: a failure here shouldn't shadow the
+// original Twilio error already being returned to the caller.
+async function recordOptOutIfApplicable(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  customerId: string,
+  companyId: string,
+  twilioErrText: string
+) {
+  try {
+    const parsed = JSON.parse(twilioErrText);
+    if (parsed?.code !== 21610) return;
+    await supabase
+      .from("customers")
+      .update({ sms_consent: false, sms_consent_at: new Date().toISOString(), sms_consent_method: "twilio_opt_out_keyword" })
+      .eq("id", customerId);
+    await supabase.from("sms_consent_events").insert({
+      company_id: companyId,
+      customer_id: customerId,
+      consent: false,
+      method: "twilio_opt_out_keyword",
+      note: "Twilio blocked send: recipient previously replied STOP (error 21610)",
+    });
+  } catch (err) {
+    console.error("Failed to record opt-out from Twilio 21610:", err instanceof Error ? err.message : err);
+  }
 }
 
 function json(body: unknown, status = 200) {

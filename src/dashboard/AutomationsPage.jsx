@@ -237,7 +237,9 @@ function AutomationFormModal({ automation, onClose, onSaved }) {
               style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 13, padding: 12, color: LIGHT.ink, marginBottom: 6, resize: 'none' }}
             />
             <div style={{ fontSize: 10.5, color: LIGHT.sub, marginBottom: 14, lineHeight: 1.5 }}>
-              Available: {SMS_VARIABLES.join(', ')}
+              Available: {SMS_VARIABLES.join(', ')}. Only sends to customers with SMS
+              consent on file. A "Reply STOP to opt out" line is added automatically
+              if your message doesn't already have one.
             </div>
           </>
         )}
