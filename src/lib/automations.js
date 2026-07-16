@@ -17,14 +17,17 @@ export const JOB_STATUSES = [
 
 export const ACTION_TYPES = [
   { key: 'send_sms', label: 'Send a text message' },
+  { key: 'send_email', label: 'Send an email' },
   { key: 'add_tag', label: 'Add a tag' },
   { key: 'change_stage', label: 'Move to pipeline stage' },
   { key: 'add_note', label: 'Log a note' },
 ]
 
-// Template variables run_due_automations() (migration
-// 023_automation_scheduler) substitutes into a send_sms message. Keep in
-// sync with that function's `replace(...)` chain.
+// Template variables run_due_automations() (migrations
+// 023_automation_scheduler / 026_automation_email_channel) substitutes
+// into a send_sms message or a send_email subject/body. Keep in sync with
+// that function's `replace(...)` chains - same variable set for both
+// channels.
 export const SMS_VARIABLES = ['{{first_name}}', '{{name}}', '{{company_name}}', '{{job_description}}', '{{job_address}}', '{{review_link}}']
 
 export async function listAutomations() {
@@ -67,6 +70,7 @@ export function describeAutomation(automation, pipelineStageLabel) {
   let actionDetail = ''
   if (automation.action_type === 'add_tag') actionDetail = `: "${automation.action_config?.tag}"`
   else if (automation.action_type === 'change_stage') actionDetail = `: ${pipelineStageLabel(automation.action_config?.stage) || automation.action_config?.stage}`
+  else if (automation.action_type === 'send_email') actionDetail = `: "${automation.action_config?.subject}"`
 
   return `When ${trigger} ${triggerValue}, ${delay}${action.toLowerCase()}${actionDetail}.`
 }

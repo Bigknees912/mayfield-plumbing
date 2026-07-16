@@ -423,12 +423,14 @@ config). Same no-code outcome as a node-graph editor, a fraction of the
 engineering effort, and no new UI dependency — this was an explicit scope
 choice (asked and confirmed) over building a canvas library integration.
 
-**Schema** (migration `021_automations_schema`):
+**Schema** (migration `021_automations_schema`, `action_type` extended to
+include `send_email` in migration `026_automation_email_channel`):
 - **`automations`** — one row per rule: `trigger_type`
   (`job_status_changed` / `pipeline_stage_changed` / `tag_added`) +
   `trigger_config` (jsonb, e.g. `{"status": "done"}`), `delay_minutes`,
-  `action_type` (`send_sms` / `add_tag` / `change_stage` / `add_note`) +
-  `action_config` (jsonb, e.g. `{"message": "..."}`), `active` toggle.
+  `action_type` (`send_sms` / `send_email` / `add_tag` / `change_stage` /
+  `add_note`) + `action_config` (jsonb, e.g. `{"message": "..."}` for SMS or
+  `{"subject": "...", "body": "..."}` for email), `active` toggle.
   Owner-only read/write via RLS, same `current_role() = 'owner'` pattern as
   other settings tables.
 - **`automation_runs`** — the delay queue. One row enqueued per matching
@@ -464,18 +466,42 @@ run: sets the loop-prevention flag, pulls up to 100 due
 dispatches on `action_type` — `add_tag`/`change_stage`/`add_note` are
 applied directly in SQL; `send_sms` renders the message (template
 variables substituted via a `replace()` chain) and calls the
-`run-automation-sms` Edge Function through `net.http_post`, authenticated
-with a dedicated Vault secret (`automation_webhook_secret`, generated with
-`gen_random_bytes()` inside Postgres, same reasoning as the SMS secrets
-above — never a literal in migration SQL). Each row is processed in its
-own `begin/exception` block so one failure (e.g. bad phone number) doesn't
-stop the batch — it's marked `status = 'failed'` with the error message
-instead.
+`run-automation-sms` Edge Function through `net.http_post`; `send_email`
+renders `subject` and `body` the same way and calls `run-automation-email`.
+Both channel functions are authenticated with the same Vault secret
+(`automation_webhook_secret`, generated with `gen_random_bytes()` inside
+Postgres, same reasoning as the SMS secrets above — never a literal in
+migration SQL; reused across both functions rather than split, since they
+share one caller and trust boundary). Each row is processed in its own
+`begin/exception` block so one failure (e.g. bad phone number, no email on
+file) doesn't stop the batch — it's marked `status = 'failed'` with the
+error message instead.
 
-**Template variables** available in a `send_sms` message (see
-`SMS_VARIABLES` in `src/lib/automations.js`): `{{first_name}}`, `{{name}}`,
-`{{company_name}}`, `{{job_description}}`, `{{job_address}}`,
-`{{review_link}}`.
+**Email channel** (migration `026_automation_email_channel`, Edge Function
+`run-automation-email`): sends via [Resend](https://resend.com)'s REST API
+(`fetch` + Bearer auth, no SDK — same convention as the Twilio calls). Uses
+`customers.email` (already existed on the table; no schema change needed
+there); if a matched customer has no email on file, the run is skipped
+gracefully (`status = 'sent'`, no error) rather than treated as a failure,
+matching how `send_sms` skips customers with no phone. Plain-text body, not
+HTML/WYSIWYG — "simple template editor" here means a subject field plus a
+body textarea with variable substitution, matching the SMS composer's
+level of complexity rather than building a rich-text editor.
+
+**Building an email *sequence***: there's no separate "sequence" concept in
+the schema — a sequence is just multiple `send_email` automations sharing
+the same trigger (e.g. `pipeline_stage_changed` → `nurture`) with staggered
+`delay_minutes` (0, then 3 days, then 7 days, ...). Each is its own rule in
+the list, independently editable/toggleable. This was a deliberate reuse of
+the existing trigger → wait → action primitive rather than adding a new
+"multi-step campaign" object — it produces the same result (a drip of
+emails after a contact lands in Nurture) without a second builder UI.
+
+**Template variables** available in a `send_sms` message, or a `send_email`
+subject/body (see `SMS_VARIABLES` in `src/lib/automations.js` — the name
+predates the email channel but the variable set and substitution logic are
+shared across both): `{{first_name}}`, `{{name}}`, `{{company_name}}`,
+`{{job_description}}`, `{{job_address}}`, `{{review_link}}`.
 
 **Default automation**: every new company gets one pre-seeded rule on
 signup (`create_company_and_owner`, updated in migration `024`) — "Ask for
@@ -485,15 +511,22 @@ old trigger (see "Review-request SMS" above) rather than running alongside
 it, so completed jobs aren't double-texted. The owner can edit or disable
 it like any other rule.
 
-**Required Edge Function secret** (Supabase dashboard → Edge Functions →
-Secrets): `run-automation-sms` needs `AUTOMATION_WEBHOOK_SECRET` (get the
-value the same way as the other webhook secrets — SQL Editor, not printed
-here):
+**Required Edge Function secrets** (Supabase dashboard → Edge Functions →
+Secrets — these are project-wide, so setting them once covers every
+function, not just the automation ones): both `run-automation-sms` and
+`run-automation-email` need `AUTOMATION_WEBHOOK_SECRET` (get the value the
+same way as the other webhook secrets — SQL Editor, not printed here):
 ```sql
 select decrypted_secret from vault.decrypted_secrets where name = 'automation_webhook_secret';
 ```
-It also needs `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER`,
-shared with the other SMS functions.
+`run-automation-sms` also needs
+`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER`, shared with
+the other SMS functions. `run-automation-email` needs:
+- `RESEND_API_KEY` — from [resend.com](https://resend.com) → API Keys,
+  after creating an account and verifying a sending domain (Resend
+  requires a verified domain before it'll send from an address on it).
+- `RESEND_FROM_EMAIL` — the address to send from, e.g.
+  `notifications@yourdomain.com`, on that verified domain.
 
 **Not built**: `pipeline_stage_changed` and `tag_added` triggers exist at
 the schema/detection level but have no seeded default automations using

@@ -145,6 +145,8 @@ function AutomationFormModal({ automation, onClose, onSaved }) {
   const [delayUnit, setDelayUnit] = useState(initialDelay.unit)
   const [actionType, setActionType] = useState(automation?.action_type || 'send_sms')
   const [actionMessage, setActionMessage] = useState(automation?.action_config?.message || '')
+  const [actionSubject, setActionSubject] = useState(automation?.action_config?.subject || '')
+  const [actionBody, setActionBody] = useState(automation?.action_config?.body || '')
   const [actionTag, setActionTag] = useState(automation?.action_config?.tag || '')
   const [actionStage, setActionStage] = useState(automation?.action_config?.stage || PIPELINE_STAGES[0].key)
   const [actionNote, setActionNote] = useState(automation?.action_config?.note || '')
@@ -157,6 +159,7 @@ function AutomationFormModal({ automation, onClose, onSaved }) {
   }
   function buildActionConfig() {
     if (actionType === 'send_sms') return { message: actionMessage.trim() }
+    if (actionType === 'send_email') return { subject: actionSubject.trim(), body: actionBody.trim() }
     if (actionType === 'add_tag') return { tag: actionTag.trim() }
     if (actionType === 'change_stage') return { stage: actionStage }
     return { note: actionNote.trim() }
@@ -184,6 +187,7 @@ function AutomationFormModal({ automation, onClose, onSaved }) {
     !loading &&
     (triggerType !== 'tag_added' || triggerTag.trim()) &&
     (actionType !== 'send_sms' || actionMessage.trim()) &&
+    (actionType !== 'send_email' || (actionSubject.trim() && actionBody.trim())) &&
     (actionType !== 'add_tag' || actionTag.trim()) &&
     (actionType !== 'add_note' || actionNote.trim())
 
@@ -234,6 +238,20 @@ function AutomationFormModal({ automation, onClose, onSaved }) {
             />
             <div style={{ fontSize: 10.5, color: LIGHT.sub, marginBottom: 14, lineHeight: 1.5 }}>
               Available: {SMS_VARIABLES.join(', ')}
+            </div>
+          </>
+        )}
+        {actionType === 'send_email' && (
+          <>
+            <TextInput value={actionSubject} onChange={setActionSubject} placeholder="Subject, e.g. Time for your seasonal checkup" />
+            <textarea
+              value={actionBody} onChange={(e) => setActionBody(e.target.value)}
+              placeholder={'Hi {{first_name}},\n\nJust a friendly reminder...'}
+              rows={5}
+              style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 13, padding: 12, color: LIGHT.ink, marginBottom: 6, resize: 'none' }}
+            />
+            <div style={{ fontSize: 10.5, color: LIGHT.sub, marginBottom: 14, lineHeight: 1.5 }}>
+              Available in subject and body: {SMS_VARIABLES.join(', ')}
             </div>
           </>
         )}
