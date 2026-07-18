@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mayfield Plumbing & Drain — Calgary, AB</title>
+<!-- This file is a template - the {{TOKEN}} placeholders below are filled in
+     by scripts/generate-marketing-site.js from a company's real trade and
+     service catalog. See that script's header comment and AUTH.md
+     "Trade-agnostic marketing site" before hand-editing. -->
+<title>{{COMPANY_NAME}} — {{LOCATION}}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
@@ -141,7 +145,7 @@
 
 <nav id="nav">
   <div class="wrap">
-    <div class="logo"><span class="dot"></span> Mayfield Plumbing &amp; Drain</div>
+    <div class="logo"><span class="dot"></span> {{COMPANY_NAME}}</div>
     <div class="nav-links">
       <a href="#services">Services</a>
       <a href="#how">How It Works</a>
@@ -160,9 +164,9 @@
   </svg>
   <div class="wrap" style="display:grid; grid-template-columns: 1.1fr 1fr; gap: 50px; align-items: start;">
     <div class="hero-content">
-      <div class="eyebrow">Calgary, AB · 24/7 Emergency Service</div>
-      <h1>The plumber that<br>actually <span class="accent">picks up.</span></h1>
-      <p class="sub">Real-time quotes over the phone, technicians tracked live, and a job booked before you've hung up. No voicemail, no "we'll call you back."</p>
+      <div class="eyebrow">{{LOCATION}} · 24/7 Emergency Service</div>
+      <h1>{{HERO_HEADLINE}}</h1>
+      <p class="sub">{{HERO_SUB}}</p>
     </div>
     <div class="lead-form reveal in" id="leadFormWrap">
       <form id="leadForm">
@@ -178,12 +182,7 @@
         <div class="row">
           <select id="lf-job">
             <option value="">What's the issue?</option>
-            <option>Drain Cleaning</option>
-            <option>Faucet Repair / Install</option>
-            <option>Toilet Repair / Install</option>
-            <option>Water Heater Install / Repair</option>
-            <option>Pipe Repair / Leak</option>
-            <option>Sump Pump</option>
+            {{LEAD_FORM_JOB_OPTIONS}}
             <option>Something else</option>
           </select>
         </div>
@@ -205,9 +204,9 @@
 
 <div class="trust-strip">
   <div class="wrap">
-    <div class="trust-item"><span class="num">12+</span> years serving Calgary</div>
+    <div class="trust-item"><span class="num">12+</span> years serving {{LOCATION}}</div>
     <div class="trust-item"><span class="num">4.9★</span> average Google rating</div>
-    <div class="trust-item"><span class="num">100%</span> licensed &amp; insured, Alberta</div>
+    <div class="trust-item"><span class="num">100%</span> licensed &amp; insured</div>
     <div class="trust-item"><span class="num">&lt;18min</span> average response time</div>
   </div>
 </div>
@@ -216,16 +215,11 @@
   <div class="wrap">
     <div class="section-head reveal">
       <div class="section-eyebrow">What We Fix</div>
-      <h2>Every job, from a dripping faucet to a flooded basement.</h2>
+      <h2>{{SERVICES_HEADLINE}}</h2>
       <p>Straightforward pricing, quoted before we ever walk in the door.</p>
     </div>
     <div class="services-grid">
-      <div class="service-card reveal"><div class="service-icon">◐</div><h3>Drain Cleaning</h3><p>Clogged, slow, or backed-up drains, cleared the same day in most cases.</p></div>
-      <div class="service-card reveal"><div class="service-icon">⚡</div><h3>Pipe Repair &amp; Leaks</h3><p>From a slow drip to a burst pipe, we treat every leak call as urgent.</p></div>
-      <div class="service-card reveal"><div class="service-icon">♨</div><h3>Water Heater Service</h3><p>Repairs and full replacements, all major brands, same-week install.</p></div>
-      <div class="service-card reveal"><div class="service-icon">◧</div><h3>Toilet Repair &amp; Install</h3><p>Running toilets, cracked tanks, or full fixture upgrades.</p></div>
-      <div class="service-card reveal"><div class="service-icon">▤</div><h3>Faucet &amp; Fixture Work</h3><p>Kitchen, bathroom, and utility fixture repair or installation.</p></div>
-      <div class="service-card reveal"><div class="service-icon">▽</div><h3>Sump Pump Service</h3><p>Install, repair, and seasonal checks before Calgary's spring melt.</p></div>
+      {{SERVICES_CARDS}}
     </div>
   </div>
 </section>
@@ -263,23 +257,24 @@
   <div class="wrap">
     <div class="section-head reveal">
       <div class="section-eyebrow">Reviews</div>
-      <h2>What Calgary homeowners say.</h2>
+      <h2>What {{LOCATION}} homeowners say.</h2>
+      <p><em>Placeholder testimonials - replace with real reviews before going live.</em></p>
     </div>
     <div class="testimonial-grid">
       <div class="testimonial reveal">
         <div class="stars">★★★★★</div>
-        <p class="quote">Called at 11pm with a burst pipe and had someone at the door in under 30 minutes. Didn't expect that.</p>
-        <div class="who">— Homeowner, SE Calgary</div>
+        <p class="quote">Called at 11pm with {{EMERGENCY_EXAMPLE}} and had someone at the door in under 30 minutes. Didn't expect that.</p>
+        <div class="who">— Homeowner, {{LOCATION}}</div>
       </div>
       <div class="testimonial reveal">
         <div class="stars">★★★★★</div>
         <p class="quote">They gave me a real price over the phone before booking anything. No surprise charges when the tech showed up.</p>
-        <div class="who">— Homeowner, NW Calgary</div>
+        <div class="who">— Homeowner, {{LOCATION}}</div>
       </div>
       <div class="testimonial reveal">
         <div class="stars">★★★★★</div>
-        <p class="quote">Got a text with a map when the plumber was 10 minutes out. Small thing but made the whole visit feel organized.</p>
-        <div class="who">— Homeowner, SW Calgary</div>
+        <p class="quote">Got a text with a map when the {{PROFESSIONAL}} was 10 minutes out. Small thing but made the whole visit feel organized.</p>
+        <div class="who">— Homeowner, {{LOCATION}}</div>
       </div>
     </div>
   </div>
@@ -288,7 +283,7 @@
 <section class="final-cta">
   <div class="wrap">
     <div class="reveal">
-      <h2>Something leaking right now?</h2>
+      <h2>{{FINAL_CTA_HEADLINE}}</h2>
       <p>Don't wait for regular business hours. Call now or request a callback and a dispatcher will reach out in minutes.</p>
       <div class="badges">
         <div class="badge">✓ Licensed &amp; Insured</div>
@@ -304,14 +299,14 @@
 
 <footer>
   <div class="wrap">
-    <div>Mayfield Plumbing &amp; Drain · Calgary, AB</div>
-    <div>Licensed &amp; Insured, Alberta · (403) 555-0100</div>
+    <div>{{COMPANY_NAME}} · {{LOCATION}}</div>
+    <div>Licensed &amp; Insured · {{PHONE}}</div>
     <div>
       <a href="terms.html" style="color:#C7D2DA; margin-right:14px;">Terms of Service</a>
       <a href="privacy.html" style="color:#C7D2DA; margin-right:14px;">Privacy Policy</a>
       <a href="data-request.html" style="color:#C7D2DA;">My Data</a>
     </div>
-    <div>© 2026 Mayfield Plumbing &amp; Drain</div>
+    <div>© {{YEAR}} {{COMPANY_NAME}}</div>
   </div>
 </footer>
 

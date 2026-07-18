@@ -1,40 +1,68 @@
-// Pricing rules for Mayfield Plumbing & Drain.
-// Change these numbers to re-price the whole business in one place.
+const { getSupabase } = require("./supabase");
 
-const JOB_TYPES = {
-  drain:       { label: "Drain Cleaning",               baseFee: 149, hours: 1,   hourly: 135, parts: 0   },
-  faucet:      { label: "Faucet Repair / Install",      baseFee: 149, hours: 1.5, hourly: 135, parts: 80  },
-  toilet:      { label: "Toilet Repair / Install",      baseFee: 149, hours: 1.5, hourly: 135, parts: 120 },
-  waterheater: { label: "Water Heater Install / Repair",baseFee: 149, hours: 3,   hourly: 145, parts: 950 },
-  pipeleak:    { label: "Pipe Repair / Leak",           baseFee: 149, hours: 2,   hourly: 145, parts: 150 },
-  sump:        { label: "Sump Pump",                    baseFee: 149, hours: 2.5, hourly: 145, parts: 400 },
-};
-
-const URGENCY = {
-  standard:  { label: "Standard",  mult: 1 },
-  sameday:   { label: "Same-Day",  mult: 1.25 },
-  emergency: { label: "Emergency", mult: 1.75 },
-};
+// Pricing used to be one hardcoded plumbing-only JOB_TYPES map here -
+// that's gone. Job types now come from this company's own `job_types` row
+// in Supabase (the same table the dashboard's Settings > Service Catalog
+// page edits), so an electrician's, HVAC company's, or locksmith's
+// receptionist prices real services instead of drain cleaning. Urgency
+// multipliers and the base fee/hourly-rate fallback come from the
+// `companies` row too, matching what the dashboard already shows the
+// owner in Settings - one number, not a second hardcoded copy of it.
 
 const PARTS_TIER_MULT = { basic: 0.75, mid: 1, premium: 1.6 };
 
+async function getJobType(supabase, companyId, jobTypeKey) {
+  const { data, error } = await supabase
+    .from("job_types")
+    .select("key, label, base_hours, hourly_rate_override, parts_cost")
+    .eq("company_id", companyId)
+    .eq("key", jobTypeKey)
+    .eq("active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function getCompanyPricingDefaults(supabase, companyId) {
+  const { data, error } = await supabase
+    .from("companies")
+    .select("base_fee, hourly_rate, sameday_multiplier, emergency_multiplier")
+    .eq("id", companyId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+function urgencyMultiplier(urgency, company) {
+  if (urgency === "standard") return 1;
+  if (urgency === "sameday") return company.sameday_multiplier;
+  if (urgency === "emergency") return company.emergency_multiplier;
+  throw new Error(`Unknown urgency: ${urgency}`);
+}
+
 /**
- * Calculates a quote range. Throws if jobType/urgency are not recognized.
- * @param {{jobType: string, property: "residential"|"commercial", urgency: string, partsTier?: string}} input
+ * Calculates a quote range for one of this company's own job types.
+ * Throws if jobType/urgency are not recognized for this company.
+ * @param {{companyId: string, jobType: string, property: "residential"|"commercial", urgency: string, partsTier?: string, supabaseClient?: object}} input
  */
-function calcQuote({ jobType, property, urgency, partsTier }) {
-  const job = JOB_TYPES[jobType];
-  const urg = URGENCY[urgency];
+async function calcQuote({ companyId, jobType, property, urgency, partsTier, supabaseClient }) {
+  const supabase = supabaseClient || getSupabase();
+
+  const [job, company] = await Promise.all([
+    getJobType(supabase, companyId, jobType),
+    getCompanyPricingDefaults(supabase, companyId),
+  ]);
   if (!job) throw new Error(`Unknown jobType: ${jobType}`);
-  if (!urg) throw new Error(`Unknown urgency: ${urgency}`);
+  const urgMult = urgencyMultiplier(urgency, company);
 
   const tierMult = PARTS_TIER_MULT[partsTier || "mid"] ?? 1;
   const commercialBump = property === "commercial" ? 1.15 : 1;
+  const hourlyRate = job.hourly_rate_override ?? company.hourly_rate;
 
-  const laborRaw = job.hours * job.hourly;
-  const partsRaw = job.parts * tierMult;
-  const subtotal = (job.baseFee + laborRaw + partsRaw) * commercialBump;
-  const withUrgency = subtotal * urg.mult;
+  const laborRaw = job.base_hours * hourlyRate;
+  const partsRaw = job.parts_cost * tierMult;
+  const subtotal = (company.base_fee + laborRaw + partsRaw) * commercialBump;
+  const withUrgency = subtotal * urgMult;
 
   const low = Math.round((withUrgency * 0.92) / 5) * 5;
   const high = Math.round((withUrgency * 1.1) / 5) * 5;
@@ -44,11 +72,11 @@ function calcQuote({ jobType, property, urgency, partsTier }) {
     low,
     high,
     breakdown: {
-      baseFee: job.baseFee,
+      baseFee: company.base_fee,
       labor: Math.round(laborRaw * commercialBump),
       parts: Math.round(partsRaw * commercialBump),
     },
   };
 }
 
-module.exports = { JOB_TYPES, URGENCY, PARTS_TIER_MULT, calcQuote };
+module.exports = { PARTS_TIER_MULT, calcQuote };

@@ -1283,6 +1283,36 @@ export type Database = {
           },
         ]
       }
+      trade_job_type_templates: {
+        Row: {
+          base_hours: number
+          display_order: number
+          hourly_rate: number
+          key: string
+          label: string
+          parts_cost: number
+          trade: string
+        }
+        Insert: {
+          base_hours?: number
+          display_order?: number
+          hourly_rate: number
+          key: string
+          label: string
+          parts_cost?: number
+          trade: string
+        }
+        Update: {
+          base_hours?: number
+          display_order?: number
+          hourly_rate?: number
+          key?: string
+          label?: string
+          parts_cost?: number
+          trade?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

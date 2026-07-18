@@ -1574,6 +1574,87 @@ real UUID to `NULL` — plus confirmed a random non-admin authenticated user
 calling `admin_list_companies()` gets rejected with `not authorized`. All
 of it rolled back; nothing was left in the database.
 
+## Trade-agnostic service catalog
+
+The app was originally plumbing-only in three places: the hardcoded job
+type list seeded at signup, the AI receptionist's system prompt, and the
+marketing site's copy. All three now derive from a company's own trade and
+service catalog instead.
+
+**`trade_job_type_templates`** (migration 044) holds starter-catalog
+defaults for five trades (Plumbing, Electrical, HVAC, Roofing, Locksmith),
+`(trade, key)` primary key, publicly readable (not sensitive - it's the
+same content as the onboarding plan comparison, not per-company data).
+`create_company_and_owner` and `admin_create_company` both seed a new
+company's `job_types` from this table for whatever trade was picked -
+`OwnerOnboardingScreen.jsx`'s trade picker includes all five plus "Other"
+(which seeds an empty catalog, same as any trade with no template). From
+that point on the template is never referenced again - `job_types` is
+fully independent, owner-editable data.
+
+**Service Catalog page** (`src/dashboard/ServiceCatalogPage.jsx` +
+`src/lib/jobTypes.js`, new "Services" tab in `AppShell.jsx`, owner-only)
+is the "fully editable afterward" half of the requirement - add, edit,
+retire/reactivate, and reprice any service. This is the *first* management
+UI `job_types` has ever had; before this it could only be seeded once at
+signup and never touched again. It writes directly against the existing
+`job_types_insert/_update/_delete` RLS policies (owner + own company),
+no new policies needed.
+
+**AppShell branding**: `src/lib/tradeMeta.js` maps `companies.trade` to a
+representative lucide icon (Wrench/Zap/Wind/Home/KeyRound, generic Hammer
+fallback for an unrecognized trade), shown next to the company name in
+`AppShell.jsx`'s header - the one "icon adapts to trade" touchpoint in the
+dashboard chrome itself, since the rest of the dashboard (JobsBoard,
+OwnerHome, ClientsPage) was already trade-neutral - it renders whatever
+`job_types` says, with no hardcoded plumbing strings, and needed no changes
+beyond finally having real per-trade data to render.
+
+**receptionist-server** (single-tenant deployment, one instance per
+company - see its README):
+- `lib/pricing.js`'s `calcQuote` is now async and reads this company's own
+  `job_types` (service catalog) and `companies` row (base fee, hourly
+  rate, urgency multipliers) from Supabase instead of a hardcoded
+  `JOB_TYPES` map - the same numbers the dashboard's Settings > Service
+  Catalog page edits. `server.js`'s `get_quote` tool handler passes
+  `companyId` and awaits it.
+- `lib/assistantConfig.js`'s `buildAssistantConfig({ company, jobTypes,
+  webhookUrl })` is a pure function that generates the full Vapi assistant
+  definition (name, first message, system prompt, and the three tools'
+  schemas) from a company's actual trade and active job types. The system
+  prompt's "how to recognize an emergency without asking" clause pulls
+  trade-appropriate cues from a small `EMERGENCY_CUES` map (flooding/burst
+  pipes for Plumbing, sparking/exposed wires for Electrical, no heat/gas
+  smell for HVAC, etc.), falling back to generic language for an
+  unrecognized trade. An electrician's generated prompt has no path to
+  ever mention "drain" - the job type list and emergency cues are both
+  looked up by trade, there's no shared vocabulary to leak from. Throws if
+  the catalog is empty rather than generating a broken assistant.
+  `test/assistantConfig.test.js` asserts this directly (cross-trade term
+  leakage, tool enum correctness, empty-catalog rejection).
+- `generate-assistant.js` (CLI) replaces the old checked-in
+  `vapi-assistant.json` (deleted - it was one hardcoded plumbing prompt
+  for every deployment). Fetches the real company + active job types and
+  prints a ready-to-upload assistant JSON. See README.md "Step 4."
+
+**Marketing site**: `marketing-site.html` is now a template with
+`{{TOKEN}}` placeholders (company name, location, hero copy, services
+grid, testimonials, footer) instead of hardcoded Mayfield/Calgary/plumbing
+content. `scripts/generate-marketing-site.js` (root-level, same resale
+model as `generate-assistant.js` - one deployed site per company) fetches
+a company's name/trade/service_area/active job types via the service role
+key and fills in the template: a small `TRADE_CONTENT` map (keyed by
+trade, generic fallback) supplies the hero headline/sub, services section
+headline, final-CTA headline, and the "professional"/"emergency example"
+words used in the (explicitly labeled placeholder) testimonials; the
+services grid itself is generated directly from the company's real
+`job_types` labels, not from the trade map. Writes
+`marketing-site.generated.html` (gitignored - it's real business content
+for one specific client, not a template to commit). Requires
+`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_COMPANY_ID` in the
+environment (see root `.env.example`); this script isn't part of the Vite
+build, it runs standalone via `npm run generate-marketing-site`.
+
 ## Not built yet (flagged in the schema, not implemented)
 
 - Job photo attachments / Supabase Storage buckets.

@@ -53,7 +53,10 @@ export default function OwnerOnboardingScreen({ plan, onBack, onDone }) {
         <TextInput value={ownerName} onChange={setOwnerName} placeholder="Jordan Reyes" />
 
         <FieldLabel>What's your trade?</FieldLabel>
-        <ChipRow options={['Plumbing', 'Electrical', 'HVAC', 'Roofing', 'Other']} value={trade} onChange={setTrade} />
+        <ChipRow options={['Plumbing', 'Electrical', 'HVAC', 'Roofing', 'Locksmith', 'Other']} value={trade} onChange={setTrade} />
+        <div style={{ fontSize: 11, color: LIGHT.sub, marginTop: -8, marginBottom: 14, lineHeight: 1.4 }}>
+          Your service catalog and pricing pre-fill with defaults for your trade - edit them anytime from Settings.
+        </div>
 
         <FieldLabel>Team size (including you)</FieldLabel>
         <ChipRow options={['Just me', '2-5', '6-15', '15+']} value={teamSize} onChange={setTeamSize} />

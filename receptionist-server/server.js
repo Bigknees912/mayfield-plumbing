@@ -57,7 +57,8 @@ async function runTool(name, args, callContext) {
 
   switch (name) {
     case "get_quote": {
-      const q = calcQuote({
+      const q = await calcQuote({
+        companyId,
         jobType: args.jobType,
         property: args.property,
         urgency: args.urgency,

@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { Home, KanbanSquare, Calendar, BookUser, Zap, LogOut } from 'lucide-react'
+import { Home, KanbanSquare, Calendar, BookUser, Zap, ClipboardList, LogOut } from 'lucide-react'
 import { LIGHT } from '../theme'
 import { GlobalStyle } from '../auth/ui'
 import { ErrorBanner } from './ui'
+import { tradeIcon } from '../lib/tradeMeta'
 import OwnerHome from './OwnerHome'
 import JobsBoard from './JobsBoard'
 import CalendarPage from './CalendarPage'
 import ClientsPage from './ClientsPage'
 import AutomationsPage from './AutomationsPage'
+import ServiceCatalogPage from './ServiceCatalogPage'
 import TechHome from './TechHome'
 
 const OWNER_TABS = [
@@ -15,6 +17,7 @@ const OWNER_TABS = [
   { id: 'jobs', label: 'Jobs', icon: KanbanSquare },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'clients', label: 'Clients', icon: BookUser },
+  { id: 'catalog', label: 'Services', icon: ClipboardList },
   { id: 'automations', label: 'Automations', icon: Zap },
 ]
 const TECH_TABS = [
@@ -33,6 +36,7 @@ export default function AppShell({ session, profile, onSignOut }) {
   const isOwner = profile.role === 'owner'
   const tabs = isOwner ? OWNER_TABS : TECH_TABS
   const company = profile.companies
+  const TradeIcon = tradeIcon(company?.trade)
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -53,9 +57,14 @@ export default function AppShell({ session, profile, onSignOut }) {
       <GlobalStyle />
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink }}>{company?.name || 'Mayfield'}</div>
-            <div style={{ fontSize: 12, color: LIGHT.sub }}>{profile.name} · {isOwner ? 'Owner' : 'Technician'}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: LIGHT.accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <TradeIcon size={17} color={LIGHT.accent} />
+            </div>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink }}>{company?.name || 'Mayfield'}</div>
+              <div style={{ fontSize: 12, color: LIGHT.sub }}>{profile.name} · {isOwner ? 'Owner' : 'Technician'}</div>
+            </div>
           </div>
           <button className="tap" onClick={handleSignOut} disabled={signingOut} style={{ width: 36, height: 36, borderRadius: 18, background: LIGHT.card, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
             <LogOut size={16} color={LIGHT.ink} />
@@ -68,6 +77,7 @@ export default function AppShell({ session, profile, onSignOut }) {
         {tab === 'jobs' && isOwner && <JobsBoard company={company} />}
         {tab === 'calendar' && <CalendarPage myTechId={isOwner ? null : session.user.id} />}
         {tab === 'clients' && isOwner && <ClientsPage company={company} />}
+        {tab === 'catalog' && isOwner && <ServiceCatalogPage company={company} />}
         {tab === 'automations' && isOwner && <AutomationsPage />}
       </div>
 

@@ -12,7 +12,10 @@ payment details for you), but every piece of code is done.
 
 - `server.js` — the webhook. Vapi hits this whenever the assistant needs a
   price, an available slot, or to book a job.
-- `lib/pricing.js` — the same pricing rules as the demo, in one place.
+- `lib/pricing.js` — quotes a job using *this company's own* `job_types`
+  catalog and `companies` pricing defaults (base fee, hourly rate, urgency
+  multipliers) - the same data the dashboard's Settings > Service Catalog
+  page edits. There's no hardcoded plumbing price list here anymore.
 - `lib/scheduling.js` — generates candidate slots and checks them against
   real `jobs` rows in Supabase (by date + time window) so two callers can't
   get double-booked.
@@ -21,8 +24,16 @@ payment details for you), but every piece of code is done.
   whole conversation.
 - `lib/supabase.js` — the Supabase client, authenticated as the service
   role since a phone call has no logged-in user to scope RLS to.
-- `vapi-assistant.json` — the assistant definition: voice, system prompt,
-  and the three tools, ready to send to Vapi's API.
+- `lib/assistantConfig.js` — pure function that builds the Vapi assistant
+  definition (voice, system prompt, and the three tools) from this
+  company's real trade and service catalog. An electrician's generated
+  prompt only ever mentions the job types in their own catalog - there's
+  no shared plumbing vocabulary left to leak from.
+- `generate-assistant.js` — CLI that fetches this company's real data and
+  runs it through `lib/assistantConfig.js`, replacing the old checked-in
+  `vapi-assistant.json` (which was one hardcoded plumbing prompt for every
+  deployment). Re-run this any time the service catalog changes materially
+  and re-upload the result to Vapi.
 
 ## Step 0: Point this server at a real company
 
@@ -72,10 +83,24 @@ vapi listen --forward-to localhost:3000/vapi/webhook
 
 ## Step 4: Create the assistant
 
-Open `vapi-assistant.json` and replace every
-`https://YOUR-DEPLOYED-SERVER.example.com/vapi/webhook` with your real
-deployed URL from Step 3. Also pick a voice: browse voices in the Vapi
-dashboard under Voice Library and drop the voiceId into the `voice` block.
+Make sure the company has at least one active service in its catalog
+first (dashboard → Settings → Service Catalog - it pre-fills from a trade
+starter template at signup, but needs to actually exist before generating
+an assistant). Then generate the assistant definition from that company's
+real trade and services:
+
+```bash
+npm install
+node generate-assistant.js https://YOUR-DEPLOYED-SERVER.example.com/vapi/webhook > assistant.generated.json
+```
+
+This reads `SUPABASE_COMPANY_ID` (Step 0), pulls the company's `trade` and
+active `job_types`, and writes a ready-to-upload Vapi assistant JSON with a
+system prompt and tool schemas built from that company's actual services -
+an electrician's version never mentions drains, a locksmith's never
+mentions furnaces. Open the generated file and drop a real `voiceId` into
+the `voice` block (browse voices in the Vapi dashboard under Voice
+Library) before uploading.
 
 Then create the assistant via the API:
 
@@ -83,11 +108,17 @@ Then create the assistant via the API:
 curl --location 'https://api.vapi.ai/assistant' \
   --header 'Authorization: Bearer YOUR_VAPI_API_KEY' \
   --header 'Content-Type: application/json' \
-  --data @vapi-assistant.json
+  --data @assistant.generated.json
 ```
 
 This returns an assistant ID. In the Vapi dashboard, go to Phone Numbers,
 select your imported Twilio number, and assign this assistant to it.
+
+**If the service catalog changes later** (a new job type, a repriced
+service), re-run the `generate-assistant.js` command and update the
+assistant via `PATCH https://api.vapi.ai/assistant/{id}` with the new
+JSON, so Alex's script and prices stay in sync with what the dashboard
+actually offers.
 
 ## Step 5: Call it
 
@@ -110,15 +141,12 @@ running your actual pricing and scheduling logic.
   `customer_phone` actually populated; if not, check the raw payload
   shape (Vapi dashboard → Calls → your call → "Logs" has the raw webhook
   body) and adjust `server.js`'s `callContext` extraction.
-- **Real-time pricing sync**: `lib/pricing.js` still has its own hardcoded
-  copy of the job types/rates, separate from the `companies` and
-  `job_types` tables the dashboard's Settings page would eventually let an
-  owner edit. If those are changed in the dashboard, this server won't
-  know until `lib/pricing.js` is updated to read from Supabase too.
 - **SMS confirmation**: Vapi has a built-in `sms` tool that can text the
   customer a booking confirmation right after the call, using the Twilio
   account you already connected. Worth adding once the core flow works.
-- **Per-client pricing**: everything in `lib/pricing.js` is one file. To
-  resell this to a second plumbing company, copy the project, change the
-  numbers, and create a second Vapi assistant, Supabase company, and
-  Twilio number.
+- **Per-client setup**: `lib/pricing.js` and `lib/assistantConfig.js` both
+  read this company's own `companies`/`job_types` rows - to resell this to
+  a second company of any trade, copy the project, point
+  `SUPABASE_COMPANY_ID` at their row, run `generate-assistant.js`, and
+  create a second Vapi assistant, Supabase company, and Twilio number. No
+  code changes needed per client.

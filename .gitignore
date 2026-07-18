@@ -10,3 +10,9 @@ bookings.json
 
 # Claude Code local settings (per-machine, not shared)
 .claude/settings.local.json
+
+# Generated per-company output from receptionist-server/generate-assistant.js
+# and scripts/generate-marketing-site.js - real business content, not a
+# source template, and different for every client deployment.
+receptionist-server/assistant.generated.json
+marketing-site.generated.html
