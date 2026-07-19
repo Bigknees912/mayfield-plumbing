@@ -1723,6 +1723,67 @@ object (seeded from `profile.companies`) so a Settings save is reflected
 immediately across every other tab in the same session, without a full
 profile refetch.
 
+## Tech inventory & recurring maintenance contracts
+
+Migration 052 adds two unrelated-but-adjacent features requested together:
+per-technician rough parts stock (feeds the Jobs board's assign picker),
+and recurring maintenance contracts with automatic reminders.
+
+**Parts & required parts** (`parts`, `job_type_parts`) - `parts` is a flat,
+company-wide catalog (owner-only writes, managed from the Service Catalog
+page's new "Parts Catalog" section, `ServiceCatalogPage.jsx`).
+`job_type_parts` links a part to a job type (many-to-many) via the same
+page's per-service "Required parts" toggle list
+(`RequiredPartsPicker`) - `src/lib/inventory.js`'s `setJobTypeParts()`
+does a full delete-and-reinsert per save rather than diffing, since this
+is a small, infrequently-edited set.
+
+**Per-tech stock** (`tech_part_stock`) - one row per (tech, part) with an
+`in_stock` boolean, RLS-gated with the same "self or owner" pattern as
+`tech_locations`/`time_entries` (a tech can edit their own row; an owner
+can edit anyone's). A missing row means "not yet set," treated as in
+stock by every reader (`listTechPartStockMap()`'s callers), matching the
+column's own `default true`. Edited today only from the owner-facing
+`src/dashboard/TeamPage.jsx` (new AppShell tab, between Services and
+Winback) - there's no tech-facing profile screen yet (`TECH_TABS` is
+still just Home + Calendar), so self-service editing isn't wired to any
+screen even though RLS already allows it.
+
+**Assign picker warning** (`JobsBoard.jsx`'s `AssignPicker`) - cross-
+references a job's `job_type_id` against `job_type_parts` and every
+candidate tech's `tech_part_stock` via `techsMissingParts()`
+(`src/lib/inventory.js`). Shows an inline "Out of X, Y" warning under a
+tech's name in the assign sheet. **Warns, never blocks** - the owner can
+still tap to assign someone who's short a part (partial job, supply-store
+run on the way, etc.).
+
+**Service contracts** (`service_contracts`) - one row per recurring
+agreement tied to a customer (e.g. "Annual Furnace Tune-Up", every 12
+months, $189/visit), managed from `ContactDetailModal.jsx`'s new
+"Maintenance Contracts" section (add / mark serviced / cancel). Owner-
+only writes, FK-hardened to the caller's own `customers`.
+`ClientsPage.jsx` shows each customer's soonest-due *active* contract
+directly on their pipeline card (`NextContractDue`), colored by
+`isOverdue`/`isDueSoon` (`src/lib/contracts.js`).
+
+**Reminders**: `send_contract_reminders()` (SECURITY DEFINER, cron-only -
+`EXECUTE` revoked from `public`/`anon`/`authenticated`) runs daily via
+`cron.schedule('send-contract-reminders-daily', '0 14 * * *', ...)`. It
+does *not* introduce a new delivery path - it selects contracts whose
+`next_due_date <= current_date + reminder_lead_days` (default 14) and not
+throttled by a recent `last_reminder_sent_at` (7-day cooldown), then calls
+the exact same `run-automation-sms` edge function via `net.http_post` +
+`vault.decrypted_secrets('automation_webhook_secret')` that
+`run_due_automations()` (Winback) already uses - so contract reminders
+automatically inherit SMS consent gating, the "Reply STOP" footer, and
+Twilio 21610 → consent-revocation handling for free.
+
+**`mark_contract_serviced(p_contract_id)`** (owner-only) rolls
+`next_due_date` forward by `frequency_months` and clears
+`last_reminder_sent_at`, so a serviced contract's reminder clock restarts
+cleanly rather than firing again immediately or drifting from the
+original schedule.
+
 ## Not built yet (flagged in the schema, not implemented)
 
 - Job photo attachments / Supabase Storage buckets.
@@ -1750,3 +1811,11 @@ profile refetch.
   in the admin panel doesn't push anything to Stripe; a paid plan's actual
   charge still comes from whatever Stripe Price the `STRIPE_PRICE_GROWTH`/
   `STRIPE_PRICE_PRO` edge function secrets point at.
+- A tech-facing profile screen — `tech_part_stock` RLS already lets a tech
+  edit their own stock rows, but `TECH_TABS` is still just Home + Calendar,
+  so in practice only the owner (via `TeamPage.jsx`) edits anyone's stock
+  today.
+- Team member management (invite link display, regenerate join code,
+  remove a team member) has no owner-facing screen — `regenerate_join_code`
+  exists as an RPC but nothing in the dashboard calls it yet. `TeamPage.jsx`
+  is scoped to parts stock only, not member administration.

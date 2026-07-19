@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { CheckCircle2, DollarSign, Plus, X, Route, Copy, ExternalLink } from 'lucide-react'
+import { CheckCircle2, DollarSign, Plus, X, Route, Copy, ExternalLink, AlertTriangle } from 'lucide-react'
 import { listJobs, listJobTypes, listTeamTechs, listTechLocationsById, assignJob, findOrCreateCustomer, createJob, distanceKm } from '../lib/jobs'
 import { createDepositCheckout } from '../lib/deposits'
 import { smsConsentScript } from '../lib/smsConsent'
+import { listParts, listJobTypePartsMap, listTechPartStockMap, techsMissingParts } from '../lib/inventory'
 import { LIGHT } from '../theme'
 import { SectionLabel, Badge, LoadingState, ErrorState, ErrorBanner, EmptyState, money, initialsOf, STATUS_META } from './ui'
 import { FieldLabel, TextInput, Checkbox, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
@@ -24,6 +25,9 @@ export default function JobsBoard({ company }) {
   const [techs, setTechs] = useState([])
   const [techLocations, setTechLocations] = useState({})
   const [jobTypes, setJobTypes] = useState([])
+  const [parts, setParts] = useState([])
+  const [jobTypePartsMap, setJobTypePartsMap] = useState({})
+  const [techStockMap, setTechStockMap] = useState({})
   const [pickerFor, setPickerFor] = useState(null)
   const [newJobOpen, setNewJobOpen] = useState(false)
   const [assigningJobId, setAssigningJobId] = useState(null)
@@ -32,11 +36,17 @@ export default function JobsBoard({ company }) {
   const [depositLink, setDepositLink] = useState(null)
 
   async function load() {
-    const [j, t, locs, jt] = await Promise.all([listJobs(), listTeamTechs(), listTechLocationsById(), listJobTypes()])
+    const [j, t, locs, jt, p, jtp, stock] = await Promise.all([
+      listJobs(), listTeamTechs(), listTechLocationsById(), listJobTypes(),
+      listParts(), listJobTypePartsMap(), listTechPartStockMap(),
+    ])
     setJobs(j)
     setTechs(t)
     setTechLocations(locs)
     setJobTypes(jt)
+    setParts(p)
+    setJobTypePartsMap(jtp)
+    setTechStockMap(stock)
   }
 
   const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [])
@@ -171,6 +181,9 @@ export default function JobsBoard({ company }) {
           job={pickerJob}
           techs={techs}
           techLocations={techLocations}
+          parts={parts}
+          jobTypePartsMap={jobTypePartsMap}
+          techStockMap={techStockMap}
           assigning={assigningJobId === pickerJob.id}
           onAssign={(techId) => handleAssign(pickerJob.id, techId, pickerJob.status)}
           onClose={() => setPickerFor(null)}
@@ -227,7 +240,7 @@ function DepositLinkModal({ link, onClose }) {
   )
 }
 
-function AssignPicker({ job, techs, techLocations, assigning, onAssign, onClose }) {
+function AssignPicker({ job, techs, techLocations, parts, jobTypePartsMap, techStockMap, assigning, onAssign, onClose }) {
   function distanceTo(tech) {
     const loc = techLocations[tech.id]
     return distanceKm(job.lat, job.lng, loc?.lat, loc?.lng)
@@ -240,6 +253,10 @@ function AssignPicker({ job, techs, techLocations, assigning, onAssign, onClose 
     if (db == null) return -1
     return da - db
   })
+  // Warn-only, never blocks the tap: an owner may still want to send
+  // someone out for a partial job or a supply-store run on the way.
+  const partsById = Object.fromEntries((parts || []).map((p) => [p.id, p]))
+  const missingByTech = techsMissingParts(job.job_type_id, jobTypePartsMap || {}, techStockMap || {}, partsById)
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 }} onClick={assigning ? undefined : onClose}>
       <div style={{ background: LIGHT.card, borderRadius: '20px 20px 0 0', padding: 20, width: '100%', maxWidth: 480, opacity: assigning ? 0.6 : 1 }} onClick={(e) => e.stopPropagation()}>
@@ -247,11 +264,22 @@ function AssignPicker({ job, techs, techLocations, assigning, onAssign, onClose 
         <div style={{ fontSize: 11.5, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 14 }}><Route size={11} /> {assigning ? 'Assigning…' : 'Sorted by distance where known'}</div>
         {ranked.map((t) => {
           const d = distanceTo(t)
+          const missing = missingByTech.get(t.id)
           return (
             <button key={t.id} className="tap" onClick={() => onAssign(t.id)} disabled={assigning} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 6px', textAlign: 'left' }}>
-              <div style={{ width: 32, height: 32, borderRadius: 16, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initialsOf(t.name)}</div>
-              <div style={{ flex: 1 }}><span style={{ fontSize: 14, color: LIGHT.ink }}>{t.name}</span></div>
-              <span style={{ fontSize: 12, color: LIGHT.sub }}>{d != null ? `${d.toFixed(1)} km away` : '—'}</span>
+              <div style={{ width: 32, height: 32, borderRadius: 16, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initialsOf(t.name)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 14, color: LIGHT.ink }}>{t.name}</span>
+                {missing && missing.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <AlertTriangle size={10} color={LIGHT.alert} />
+                    <span style={{ fontSize: 10.5, color: LIGHT.alert, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Out of {missing.join(', ')}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <span style={{ fontSize: 12, color: LIGHT.sub, flexShrink: 0 }}>{d != null ? `${d.toFixed(1)} km away` : '—'}</span>
             </button>
           )
         })}

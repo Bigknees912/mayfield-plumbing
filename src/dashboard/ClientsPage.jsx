@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core'
-import { Plus, X, Phone, Mail } from 'lucide-react'
+import { Plus, X, Phone, Mail, CalendarClock } from 'lucide-react'
 import { listContacts, updateContactStage, createContact, PIPELINE_STAGES } from '../lib/crm'
+import { listActiveContractsByCustomer, isOverdue, isDueSoon } from '../lib/contracts'
 import { smsConsentScript } from '../lib/smsConsent'
 import { LIGHT } from '../theme'
 import { SectionLabel, LoadingState, ErrorState, ErrorBanner, initialsOf } from './ui'
@@ -23,14 +24,16 @@ import ContactDetailModal from './ContactDetailModal'
 // not yet pull in raw web-form leads.
 export default function ClientsPage({ company }) {
   const [contacts, setContacts] = useState([])
+  const [contractsByCustomer, setContractsByCustomer] = useState({})
   const [addOpen, setAddOpen] = useState(false)
   const [activeId, setActiveId] = useState(null)
   const [detailForId, setDetailForId] = useState(null)
   const [moveError, setMoveError] = useState('')
 
   async function load() {
-    const data = await listContacts()
+    const [data, contracts] = await Promise.all([listContacts(), listActiveContractsByCustomer()])
     setContacts(data)
+    setContractsByCustomer(contracts)
   }
 
   const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [])
@@ -105,6 +108,14 @@ export default function ClientsPage({ company }) {
       : c)))
   }
 
+  // Patches this customer's active-contracts list from ContactDetailModal
+  // after an add/mark-serviced/cancel - same optimistic-patch spirit as
+  // the handlers above, so the card's next-due badge updates without a
+  // full board reload.
+  function handleContractsChanged(contactId, activeContracts) {
+    setContractsByCustomer((m) => ({ ...m, [contactId]: activeContracts }))
+  }
+
   if (loading) return <LoadingState />
   if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
 
@@ -130,6 +141,7 @@ export default function ClientsPage({ company }) {
               key={stage.key}
               stage={stage}
               contacts={contacts.filter((c) => c.pipeline_stage === stage.key)}
+              contractsByCustomer={contractsByCustomer}
               onOpen={(id) => setDetailForId(id)}
             />
           ))}
@@ -137,7 +149,7 @@ export default function ClientsPage({ company }) {
         <DragOverlay>
           {activeContact ? (
             <div style={{ background: LIGHT.card, borderRadius: 12, padding: 10, width: 200, boxShadow: '0 10px 24px rgba(0,0,0,0.22)' }}>
-              <ContactCardContent contact={activeContact} />
+              <ContactCardContent contact={activeContact} contracts={contractsByCustomer[activeContact.id]} />
             </div>
           ) : null}
         </DragOverlay>
@@ -152,13 +164,14 @@ export default function ClientsPage({ company }) {
           onTagsChanged={handleTagsChanged}
           onConsentChanged={handleConsentChanged}
           onPiiDeleted={handlePiiDeleted}
+          onContractsChanged={handleContractsChanged}
         />
       )}
     </>
   )
 }
 
-function StageColumn({ stage, contacts, onOpen }) {
+function StageColumn({ stage, contacts, contractsByCustomer, onOpen }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.key })
   return (
     <div
@@ -170,14 +183,31 @@ function StageColumn({ stage, contacts, onOpen }) {
         <span style={{ fontSize: 11, fontWeight: 600, color: LIGHT.sub, background: LIGHT.card, borderRadius: 10, padding: '1px 7px' }}>{contacts.length}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {contacts.map((c) => <ContactCard key={c.id} contact={c} onOpen={onOpen} />)}
+        {contacts.map((c) => <ContactCard key={c.id} contact={c} contracts={contractsByCustomer[c.id]} onOpen={onOpen} />)}
         {contacts.length === 0 && <div style={{ fontSize: 11, color: LIGHT.sub, textAlign: 'center', padding: '18px 0' }}>Drop here</div>}
       </div>
     </div>
   )
 }
 
-function ContactCardContent({ contact }) {
+function formatDate(d) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+}
+
+// Earliest-due active contract only - the card is small, full details
+// live in ContactDetailModal's Maintenance Contracts section.
+function NextContractDue({ contracts }) {
+  if (!contracts || contracts.length === 0) return null
+  const next = contracts[0] // listActiveContractsByCustomer already orders by next_due_date asc
+  const color = isOverdue(next) ? LIGHT.alert : isDueSoon(next) ? LIGHT.accent : LIGHT.sub
+  return (
+    <div style={{ fontSize: 10.5, color, display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontWeight: isOverdue(next) || isDueSoon(next) ? 700 : 400 }}>
+      <CalendarClock size={10} /> {next.name} due {formatDate(next.next_due_date)}
+    </div>
+  )
+}
+
+function ContactCardContent({ contact, contracts }) {
   const tags = contact.tags || []
   return (
     <>
@@ -205,11 +235,12 @@ function ContactCardContent({ contact }) {
           {tags.length > 2 && <span style={{ fontSize: 9.5, color: LIGHT.sub }}>+{tags.length - 2}</span>}
         </div>
       )}
+      <NextContractDue contracts={contracts} />
     </>
   )
 }
 
-function ContactCard({ contact, onOpen }) {
+function ContactCard({ contact, contracts, onOpen }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: contact.id })
   return (
     <div
@@ -227,7 +258,7 @@ function ContactCard({ contact, onOpen }) {
         opacity: isDragging ? 0.35 : 1,
       }}
     >
-      <ContactCardContent contact={contact} />
+      <ContactCardContent contact={contact} contracts={contracts} />
     </div>
   )
 }

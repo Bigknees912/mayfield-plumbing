@@ -825,6 +825,36 @@ export type Database = {
           },
         ]
       }
+      job_type_parts: {
+        Row: {
+          job_type_id: string
+          part_id: string
+        }
+        Insert: {
+          job_type_id: string
+          part_id: string
+        }
+        Update: {
+          job_type_id?: string
+          part_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_type_parts_job_type_id_fkey"
+            columns: ["job_type_id"]
+            isOneToOne: false
+            referencedRelation: "job_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_type_parts_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_types: {
         Row: {
           active: boolean
@@ -1079,6 +1109,35 @@ export type Database = {
           },
         ]
       }
+      parts: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans: {
         Row: {
           active: boolean
@@ -1179,6 +1238,63 @@ export type Database = {
           total_revenue?: number
         }
         Relationships: []
+      }
+      service_contracts: {
+        Row: {
+          company_id: string
+          created_at: string
+          customer_id: string
+          frequency_months: number
+          id: string
+          last_reminder_sent_at: string | null
+          name: string
+          next_due_date: string
+          price: number | null
+          reminder_lead_days: number
+          status: string
+        }
+        Insert: {
+          company_id?: string
+          created_at?: string
+          customer_id: string
+          frequency_months: number
+          id?: string
+          last_reminder_sent_at?: string | null
+          name: string
+          next_due_date: string
+          price?: number | null
+          reminder_lead_days?: number
+          status?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          customer_id?: string
+          frequency_months?: number
+          id?: string
+          last_reminder_sent_at?: string | null
+          name?: string
+          next_due_date?: string
+          price?: number | null
+          reminder_lead_days?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_contracts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_contracts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sms_consent_events: {
         Row: {
@@ -1341,6 +1457,52 @@ export type Database = {
             foreignKeyName: "tech_locations_tech_id_fkey"
             columns: ["tech_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tech_part_stock: {
+        Row: {
+          company_id: string
+          in_stock: boolean
+          part_id: string
+          tech_id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id?: string
+          in_stock?: boolean
+          part_id: string
+          tech_id: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          in_stock?: boolean
+          part_id?: string
+          tech_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tech_part_stock_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tech_part_stock_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tech_part_stock_tech_id_fkey"
+            columns: ["tech_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1577,6 +1739,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_contract_serviced: {
+        Args: { p_contract_id: string }
+        Returns: {
+          company_id: string
+          created_at: string
+          customer_id: string
+          frequency_months: number
+          id: string
+          last_reminder_sent_at: string | null
+          name: string
+          next_due_date: string
+          price: number | null
+          reminder_lead_days: number
+          status: string
+        }
+      }
       record_sms_consent: {
         Args: {
           p_consent: boolean
@@ -1588,6 +1766,7 @@ export type Database = {
       }
       regenerate_join_code: { Args: never; Returns: string }
       run_due_automations: { Args: never; Returns: undefined }
+      send_contract_reminders: { Args: never; Returns: undefined }
       take_revenue_snapshot: { Args: never; Returns: undefined }
     }
     Enums: {

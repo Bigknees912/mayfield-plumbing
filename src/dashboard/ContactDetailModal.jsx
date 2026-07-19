@@ -1,19 +1,25 @@
 import { useState } from 'react'
-import { X, Phone, Mail, MapPin, StickyNote, PhoneCall, MessageCircle, MessageCircleOff, ShieldOff, Trash2 } from 'lucide-react'
+import { X, Phone, Mail, MapPin, StickyNote, PhoneCall, MessageCircle, MessageCircleOff, ShieldOff, Trash2, CalendarClock, Plus, CheckCircle2 } from 'lucide-react'
 import { listInteractions, addInteraction, updateContactTags, updateContactConsent, deleteContactPii, PIPELINE_STAGES } from '../lib/crm'
+import { listContractsForCustomer, createContract, markContractServiced, cancelContract, isOverdue, isDueSoon } from '../lib/contracts'
 import { LIGHT } from '../theme'
-import { initialsOf, LoadingState, ErrorState, ErrorBanner } from './ui'
-import { FieldLabel, ErrorText, usePendingAction } from '../auth/ui'
+import { initialsOf, LoadingState, ErrorState, ErrorBanner, money } from './ui'
+import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
 import { useAsyncData } from './useAsyncData'
 
 function formatWhen(iso) {
   return new Date(iso).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
+function formatDate(d) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 // Opened by clicking a card on the pipeline board (see ClientsPage.jsx).
-// Two things live here that the compact card can't show: the tag editor
-// and the interaction timeline (view + add note/log call).
-export default function ContactDetailModal({ contact, allTags, onClose, onTagsChanged, onConsentChanged, onPiiDeleted }) {
+// Three things live here that the compact card can't show: the tag
+// editor, the interaction timeline, and (see below) recurring maintenance
+// contracts (view/add/mark serviced/cancel).
+export default function ContactDetailModal({ contact, allTags, onClose, onTagsChanged, onConsentChanged, onPiiDeleted, onContractsChanged }) {
   const [interactions, setInteractions] = useState([])
   const [tags, setTags] = useState(contact.tags || [])
   const [tagInput, setTagInput] = useState('')
@@ -34,6 +40,25 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
     setInteractions(data)
   }
   const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [contact.id])
+
+  const [contracts, setContracts] = useState([])
+  async function loadContracts() {
+    const data = await listContractsForCustomer(contact.id)
+    setContracts(data)
+  }
+  const { loading: contractsLoading, error: contractsError, hasLoadedOnce: contractsLoadedOnce, reload: reloadContracts } = useAsyncData(loadContracts, [contact.id])
+
+  // Re-reads this customer's contracts and pushes the active subset up to
+  // ClientsPage's board card - same "notify the parent" pattern as
+  // onTagsChanged/onConsentChanged, just via a fresh server read (contract
+  // lists are small and infrequently changed, so a full refetch after any
+  // add/service/cancel is simpler than hand-patching local state).
+  async function refreshContracts() {
+    const fresh = await listContractsForCustomer(contact.id)
+    setContracts(fresh)
+    onContractsChanged?.(contact.id, fresh.filter((c) => c.status === 'active').sort((a, b) => a.next_due_date.localeCompare(b.next_due_date)))
+    return fresh
+  }
 
   async function saveTags(nextTags) {
     const prev = tags
@@ -109,6 +134,55 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
       setComposerBody('')
       await reload()
     })
+  }
+
+  const [addingContract, setAddingContract] = useState(false)
+  const [contractName, setContractName] = useState('')
+  const [contractFrequency, setContractFrequency] = useState('12')
+  const [contractPrice, setContractPrice] = useState('')
+  const [contractNextDue, setContractNextDue] = useState('')
+  const { loading: savingContract, error: addContractError, run: runAddContract, setError: setAddContractError } = usePendingAction()
+  const [contractActionId, setContractActionId] = useState(null)
+  const [contractActionError, setContractActionError] = useState('')
+
+  function submitContract() {
+    if (!contractName.trim() || !contractNextDue) return setAddContractError('Name and next-due date are required.')
+    const freqNum = Number(contractFrequency)
+    if (!Number.isFinite(freqNum) || freqNum <= 0) return setAddContractError('Enter a valid frequency in months.')
+    const priceNum = contractPrice.trim() === '' ? null : Number(contractPrice)
+    if (priceNum !== null && (Number.isNaN(priceNum) || priceNum < 0)) return setAddContractError('Enter a valid price, or leave it blank.')
+    runAddContract(async () => {
+      await createContract({ customerId: contact.id, name: contractName, frequencyMonths: freqNum, price: priceNum, nextDueDate: contractNextDue })
+      setContractName(''); setContractPrice(''); setContractNextDue(''); setContractFrequency('12')
+      setAddingContract(false)
+      await refreshContracts()
+    })
+  }
+
+  async function handleMarkServiced(contractId) {
+    setContractActionId(contractId)
+    setContractActionError('')
+    try {
+      await markContractServiced(contractId)
+      await refreshContracts()
+    } catch (err) {
+      setContractActionError(err.message || String(err))
+    } finally {
+      setContractActionId(null)
+    }
+  }
+
+  async function handleCancelContract(contractId) {
+    setContractActionId(contractId)
+    setContractActionError('')
+    try {
+      await cancelContract(contractId)
+      await refreshContracts()
+    } catch (err) {
+      setContractActionError(err.message || String(err))
+    } finally {
+      setContractActionId(null)
+    }
   }
 
   const stageLabel = PIPELINE_STAGES.find((s) => s.key === contact.pipeline_stage)?.label
@@ -206,6 +280,88 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
             <ErrorText>{tagError}</ErrorText>
           </>
         )}
+
+        <FieldLabel>Maintenance Contracts</FieldLabel>
+        <div style={{ background: LIGHT.bg, borderRadius: 14, padding: 12, marginBottom: 14 }}>
+          {contractsLoading && <LoadingState>Loading contracts…</LoadingState>}
+          {contractsError && !contractsLoadedOnce && <ErrorState message={contractsError} onRetry={reloadContracts} />}
+          {!contractsLoading && (
+            <>
+              {contracts.filter((c) => c.status === 'active').length === 0 && !addingContract && (
+                <div style={{ fontSize: 12, color: LIGHT.sub, marginBottom: 10 }}>No active contracts.</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: contracts.length > 0 ? 10 : 0 }}>
+                {contracts.filter((c) => c.status === 'active').map((c) => (
+                  <div key={c.id} style={{ background: LIGHT.card, borderRadius: 12, padding: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: LIGHT.ink }}>{c.name}</div>
+                        <div style={{ fontSize: 11, color: LIGHT.sub }}>
+                          Every {c.frequency_months} {c.frequency_months === 1 ? 'month' : 'months'}
+                          {c.price != null ? ` · ${money(c.price)}` : ''}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 11, fontWeight: isOverdue(c) || isDueSoon(c) ? 700 : 600, color: isOverdue(c) ? LIGHT.alert : isDueSoon(c) ? LIGHT.accent : LIGHT.sub }}>
+                          <CalendarClock size={11} /> Next due {formatDate(c.next_due_date)}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button
+                        className="tap"
+                        onClick={() => handleMarkServiced(c.id)}
+                        disabled={contractActionId === c.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: LIGHT.success, background: LIGHT.successSoft, borderRadius: 8, padding: '5px 10px' }}
+                      >
+                        <CheckCircle2 size={11} /> {contractActionId === c.id ? 'Saving…' : 'Mark Serviced'}
+                      </button>
+                      <button
+                        className="tap"
+                        onClick={() => handleCancelContract(c.id)}
+                        disabled={contractActionId === c.id}
+                        style={{ fontSize: 11, fontWeight: 600, color: LIGHT.sub }}
+                      >
+                        Cancel Contract
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <ErrorText>{contractActionError}</ErrorText>
+
+              {addingContract ? (
+                <div style={{ background: LIGHT.card, borderRadius: 12, padding: 10 }}>
+                  <FieldLabel>Contract name</FieldLabel>
+                  <TextInput value={contractName} onChange={setContractName} placeholder="Annual Furnace Tune-Up" />
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <FieldLabel>Frequency (months)</FieldLabel>
+                      <TextInput value={contractFrequency} onChange={setContractFrequency} placeholder="12" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <FieldLabel>Price ($)</FieldLabel>
+                      <TextInput value={contractPrice} onChange={setContractPrice} placeholder="189" />
+                    </div>
+                  </div>
+                  <FieldLabel>Next due date</FieldLabel>
+                  <TextInput value={contractNextDue} onChange={setContractNextDue} type="date" />
+                  <ErrorText>{addContractError}</ErrorText>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <PrimaryButton onClick={submitContract} disabled={savingContract} style={{ flex: 1 }}>
+                      {savingContract ? 'Adding…' : 'Add Contract'}
+                    </PrimaryButton>
+                    <button className="tap" onClick={() => setAddingContract(false)} disabled={savingContract} style={{ fontSize: 12.5, fontWeight: 600, color: LIGHT.sub, padding: '0 12px' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className="tap" onClick={() => setAddingContract(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: LIGHT.accent }}>
+                  <Plus size={13} /> Add Contract
+                </button>
+              )}
+            </>
+          )}
+        </div>
 
         <FieldLabel>Timeline</FieldLabel>
         <div style={{ background: LIGHT.bg, borderRadius: 14, padding: 12, marginBottom: 14 }}>

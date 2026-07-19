@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Home, KanbanSquare, Calendar, BookUser, Zap, ClipboardList, Receipt, Settings as SettingsIcon, LogOut } from 'lucide-react'
+import { Home, KanbanSquare, Calendar, BookUser, Zap, ClipboardList, Receipt, Users, Settings as SettingsIcon, LogOut } from 'lucide-react'
 import { LIGHT } from '../theme'
 import { GlobalStyle } from '../auth/ui'
 import { ErrorBanner } from './ui'
@@ -11,6 +11,7 @@ import ClientsPage from './ClientsPage'
 import AutomationsPage from './AutomationsPage'
 import ServiceCatalogPage from './ServiceCatalogPage'
 import EstimatesPage from './EstimatesPage'
+import TeamPage from './TeamPage'
 import SettingsPage from './SettingsPage'
 import TechHome from './TechHome'
 
@@ -21,6 +22,7 @@ const OWNER_TABS = [
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'clients', label: 'Clients', icon: BookUser },
   { id: 'catalog', label: 'Services', icon: ClipboardList },
+  { id: 'team', label: 'Team', icon: Users },
   { id: 'automations', label: 'Winback', icon: Zap },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
@@ -29,10 +31,10 @@ const TECH_TABS = [
   { id: 'calendar', label: 'Calendar', icon: Calendar },
 ]
 
-// Trimmed-down version of app-demo.jsx's AppShell: Map, Insights, and Team
-// from the demo aren't wired up yet. Settings currently only has a
-// Pricing & Revenue section (see SettingsPage.jsx) - Team/General/
-// Integrations aren't built.
+// Trimmed-down version of app-demo.jsx's AppShell: Map and Insights from
+// the demo aren't wired up yet. Settings currently only has a
+// Pricing & Revenue section (see SettingsPage.jsx) - General/Integrations
+// aren't built.
 export default function AppShell({ session, profile, onSignOut }) {
   const [tab, setTab] = useState('home')
   const [signingOut, setSigningOut] = useState(false)
@@ -87,6 +89,7 @@ export default function AppShell({ session, profile, onSignOut }) {
         {tab === 'calendar' && <CalendarPage myTechId={isOwner ? null : session.user.id} />}
         {tab === 'clients' && isOwner && <ClientsPage company={company} />}
         {tab === 'catalog' && isOwner && <ServiceCatalogPage company={company} />}
+        {tab === 'team' && isOwner && <TeamPage />}
         {tab === 'automations' && isOwner && <AutomationsPage />}
         {tab === 'settings' && isOwner && <SettingsPage company={company} onSaved={setCompany} />}
       </div>
