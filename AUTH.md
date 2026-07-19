@@ -1784,9 +1784,77 @@ Twilio 21610 → consent-revocation handling for free.
 cleanly rather than firing again immediately or drifting from the
 original schedule.
 
+## Document Vault & last-visit summary
+
+Migration 053 adds a per-customer document history plus a "what did we do
+here last time" lookup for techs in the field, with no phone call to the
+office required.
+
+**Document Vault** (`src/dashboard/DocumentVaultModal.jsx`, opened from a
+button in `ContactDetailModal.jsx`) merges three sources into one
+newest-first scrollable list, per customer:
+
+- **Invoices** (`invoices` table, already existed) - read-only here.
+  Worth knowing: nothing in this app currently *writes* an invoice row
+  (no invoice-generation UI exists yet), so in practice the vault's
+  invoice section stays empty until that gap is closed separately - this
+  feature only wires up the *read* side.
+- **Job photos** (`job_photos`, new table + a private `job-photos`
+  Storage bucket) - metadata (job, customer, caption, uploader) lives in
+  Postgres; the bytes live in Storage, and every read goes through a
+  60-minute signed URL (`src/lib/documents.js`'s `withSignedUrls()`),
+  never a public one.
+- **Warranty/workmanship notes** - reuse `customer_interactions` (same
+  table backing the general Note/Call timeline in `ContactDetailModal`)
+  with a new `type = 'warranty'` value (the check constraint was widened,
+  not a new table) - `src/lib/documents.js`'s `addWarrantyNote()`/
+  `listWarrantyNotesForCustomer()`.
+
+**Storage RLS**: `job-photos` is private (`public: false`). Policies on
+`storage.objects` mirror `job_photos`' own table RLS by parsing the
+object path via `storage.foldername(name)` - the convention is
+`{company_id}/{job_id}/{uuid}{ext}`, so `foldername(name)[1]` is checked
+against `current_company_id()` and, for inserts, `foldername(name)[2]`
+is checked against a job the caller is either the owner of the company
+for or the `assigned_tech_id` on. This was verified with two rounds of
+rolled-back SQL transaction tests - one on `public.job_photos`, one
+inserting rows directly into `storage.objects` under different
+impersonated users - since the two RLS surfaces (table + storage) are
+independent and both need to agree. Note: `storage.objects` has a
+`protect_delete()` trigger that blocks direct SQL `DELETE` entirely
+(Supabase-managed) - deletion only works through the Storage API
+(`src/lib/documents.js`'s `deleteJobPhoto()`), which is what the app
+uses.
+
+**Gotcha already hit once**: `job_photos.uploaded_by` needs `default
+auth.uid()` - without it, an insert that doesn't explicitly pass
+`uploaded_by` leaves it `NULL`, and the "uploader can delete their own
+photo" RLS policy (`uploaded_by = auth.uid()`) then silently rejects
+everyone, including the actual uploader, since `NULL = anything` is
+never true in SQL. Caught during verification (migration `053b`), not
+before.
+
+**Where photos get uploaded**: `TechHome.jsx`'s `JobDetailModal` (a tech's
+in-field job detail view) and `DocumentVaultModal.jsx` (owner side, picks
+one of the customer's jobs from a dropdown since `job_id` is required).
+Both call the same `uploadJobPhoto()` in `src/lib/documents.js`.
+
+**Last-visit summary** (`TechHome.jsx`'s `JobDetailModal`, via
+`getLastVisit()` in `src/lib/jobs.js`) - looks up the most recently
+*completed* job for the same `customer_id`, excluding the job currently
+open, and shows its date, job type, and notes in a small card right in
+the detail view. Silently shows nothing for a first-time customer (no
+prior completed job) rather than an empty state or error - this is
+supplementary context, not something worth interrupting the job detail
+screen over if the lookup is slow or fails.
+
 ## Not built yet (flagged in the schema, not implemented)
 
-- Job photo attachments / Supabase Storage buckets.
+- Invoice generation - the `invoices` table and the Document Vault's
+  read side both exist (see "Document Vault & last-visit summary" above),
+  but nothing in the app writes an invoice row yet. The vault will show
+  real invoices the moment something does; today that section is just
+  empty.
 - Stripe billing webhooks (subscriptions table exists, nothing populates
   `stripe_customer_id`/`stripe_subscription_id` yet beyond the `starter`
   default).

@@ -60,6 +60,35 @@ export async function listJobTypes() {
   return data
 }
 
+export async function listJobsForCustomer(customerId) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select(JOB_SELECT)
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+// Most recent COMPLETED job for this customer, excluding the job
+// currently open - lets a job detail view answer "what did we do here
+// last time" (date, job type, notes) without a call to the office. Null
+// for a first-time customer or one with no completed jobs yet.
+export async function getLastVisit(customerId, excludeJobId) {
+  if (!customerId) return null
+  let query = supabase
+    .from('jobs')
+    .select(JOB_SELECT)
+    .eq('customer_id', customerId)
+    .eq('status', 'done')
+    .order('completed_at', { ascending: false })
+    .limit(1)
+  if (excludeJobId) query = query.neq('id', excludeJobId)
+  const { data, error } = await query.maybeSingle()
+  if (error) throw error
+  return data
+}
+
 export async function listTeamTechs() {
   const { data, error } = await supabase
     .from('profiles')

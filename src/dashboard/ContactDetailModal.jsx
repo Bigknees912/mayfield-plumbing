@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { X, Phone, Mail, MapPin, StickyNote, PhoneCall, MessageCircle, MessageCircleOff, ShieldOff, Trash2, CalendarClock, Plus, CheckCircle2 } from 'lucide-react'
+import { X, Phone, Mail, MapPin, StickyNote, PhoneCall, MessageCircle, MessageCircleOff, ShieldOff, Trash2, CalendarClock, Plus, CheckCircle2, FolderOpen } from 'lucide-react'
 import { listInteractions, addInteraction, updateContactTags, updateContactConsent, deleteContactPii, PIPELINE_STAGES } from '../lib/crm'
 import { listContractsForCustomer, createContract, markContractServiced, cancelContract, isOverdue, isDueSoon } from '../lib/contracts'
 import { LIGHT } from '../theme'
 import { initialsOf, LoadingState, ErrorState, ErrorBanner, money } from './ui'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
 import { useAsyncData } from './useAsyncData'
+import DocumentVaultModal from './DocumentVaultModal'
 
 function formatWhen(iso) {
   return new Date(iso).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -136,6 +137,8 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
     })
   }
 
+  const [vaultOpen, setVaultOpen] = useState(false)
+
   const [addingContract, setAddingContract] = useState(false)
   const [contractName, setContractName] = useState('')
   const [contractFrequency, setContractFrequency] = useState('12')
@@ -205,6 +208,14 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
           </div>
           <button className="tap" onClick={onClose}><X size={20} color={LIGHT.sub} /></button>
         </div>
+
+        <button
+          className="tap"
+          onClick={() => setVaultOpen(true)}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: LIGHT.accent, background: LIGHT.accentSoft, borderRadius: 10, padding: '10px 0', marginBottom: 16 }}
+        >
+          <FolderOpen size={14} /> Document Vault
+        </button>
 
         {piiDeletedAt ? (
           <div style={{ background: LIGHT.bg, borderRadius: 14, padding: 14, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -464,6 +475,7 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
           </div>
         )}
       </div>
+      {vaultOpen && <DocumentVaultModal contact={contact} onClose={() => setVaultOpen(false)} />}
     </div>
   )
 }

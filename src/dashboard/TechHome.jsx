@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Clock, CheckCircle2, Clock3, Navigation, Play, MapPin, ChevronRight, X, Phone, Users, DollarSign } from 'lucide-react'
-import { listJobsForTechToday, advanceJobStatus, updateJobNotes } from '../lib/jobs'
+import { useEffect, useRef, useState } from 'react'
+import { Clock, CheckCircle2, Clock3, Navigation, Play, MapPin, ChevronRight, X, Phone, Users, DollarSign, History, Image as ImageIcon, Plus, Trash2 } from 'lucide-react'
+import { listJobsForTechToday, advanceJobStatus, updateJobNotes, getLastVisit } from '../lib/jobs'
+import { listPhotosForJob, uploadJobPhoto, deleteJobPhoto } from '../lib/documents'
 import { getOpenTimeEntry, clockIn, clockOut } from '../lib/timeEntries'
 import { LIGHT } from '../theme'
 import { SectionLabel, Badge, LoadingState, ErrorState, ErrorBanner, EmptyState, money, URGENCY_STYLE } from './ui'
@@ -169,6 +170,20 @@ function JobDetailModal({ job, onClose, onSaveNotes }) {
   const [error, setError] = useState('')
   const u = URGENCY_STYLE[job.urgency]
 
+  // Repeat-customer context, loaded once per job open - so a tech can see
+  // what was done here last time without calling the office. Silently
+  // stays empty on a first-time customer or if the lookup fails; this is
+  // helpful context, not something worth blocking the job detail on.
+  const [lastVisit, setLastVisit] = useState(undefined)
+  useEffect(() => {
+    let cancelled = false
+    setLastVisit(undefined)
+    getLastVisit(job.customer_id, job.id)
+      .then((v) => { if (!cancelled) setLastVisit(v) })
+      .catch(() => { if (!cancelled) setLastVisit(null) })
+    return () => { cancelled = true }
+  }, [job.id, job.customer_id])
+
   async function save() {
     setSaving(true)
     setError('')
@@ -201,6 +216,8 @@ function JobDetailModal({ job, onClose, onSaveNotes }) {
           <DetailRow icon={DollarSign} label="Estimated" value={job.price_low != null ? `${money(job.price_low)} - ${money(job.price_high)}` : '—'} />
         </div>
 
+        {lastVisit && <LastVisitCard visit={lastVisit} />}
+
         <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
           {job.customers?.phone && (
             <a href={`tel:${job.customers.phone.replace(/[^0-9]/g, '')}`} className="tap" style={{ flex: 1, textAlign: 'center', background: LIGHT.success, color: '#fff', borderRadius: 10, padding: '12px 0', fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}>
@@ -223,7 +240,111 @@ function JobDetailModal({ job, onClose, onSaveNotes }) {
         <button className="tap" onClick={save} disabled={saving} style={{ width: '100%', textAlign: 'center', background: LIGHT.ink, color: LIGHT.bg, border: 'none', borderRadius: 10, padding: '11px 0', fontSize: 13, fontWeight: 600 }}>
           {saving ? 'Saving…' : saved ? 'Saved' : 'Save Notes'}
         </button>
+
+        <div style={{ height: 1, background: LIGHT.border, margin: '18px 0' }} />
+        <JobPhotosSection job={job} />
       </div>
+    </div>
+  )
+}
+
+function formatVisitDate(iso) {
+  return new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+// Surfaces the most recent completed job for this same customer, right on
+// the job detail view - so a tech doesn't need to call the office to ask
+// what was done there before. Only rendered when getLastVisit() found one
+// (see the useEffect above), so a first-time customer shows nothing here.
+function LastVisitCard({ visit }) {
+  return (
+    <div style={{ background: LIGHT.accentSoft, borderRadius: 14, padding: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: LIGHT.accent, marginBottom: 6 }}>
+        <History size={13} /> Last Visit · {formatVisitDate(visit.completed_at)}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: LIGHT.ink, marginBottom: visit.notes ? 4 : 0 }}>
+        {visit.job_types?.label || visit.description}
+      </div>
+      {visit.notes && <div style={{ fontSize: 12.5, color: LIGHT.ink, lineHeight: 1.4 }}>{visit.notes}</div>}
+    </div>
+  )
+}
+
+function JobPhotosSection({ job }) {
+  const [photos, setPhotos] = useState(undefined)
+  const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+  const fileInputRef = useRef(null)
+
+  function load() {
+    setError('')
+    listPhotosForJob(job.id).then(setPhotos).catch((err) => setError(err.message || String(err)))
+  }
+  useEffect(load, [job.id])
+
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    setError('')
+    uploadJobPhoto({ job, customerId: job.customer_id, file })
+      .then((photo) => setPhotos((ps) => [{ ...photo, url: URL.createObjectURL(file) }, ...(ps || [])]))
+      .catch((err) => setError(err.message || String(err)))
+      .finally(() => setUploading(false))
+  }
+
+  async function remove(photo) {
+    setDeletingId(photo.id)
+    setError('')
+    try {
+      await deleteJobPhoto(photo)
+      setPhotos((ps) => ps.filter((p) => p.id !== photo.id))
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <FieldLabel>Job Photos</FieldLabel>
+        <button className="tap" onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: LIGHT.accent }}>
+          <Plus size={13} /> {uploading ? 'Uploading…' : 'Add Photo'}
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display: 'none' }} />
+      </div>
+      {photos === undefined && !error && <div style={{ fontSize: 12, color: LIGHT.sub }}>Loading photos…</div>}
+      {photos && photos.length === 0 && <div style={{ fontSize: 12, color: LIGHT.sub, marginBottom: 4 }}>No photos yet - document the work as you go.</div>}
+      {photos && photos.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {photos.map((p) => (
+            <div key={p.id} style={{ position: 'relative', width: 64, height: 64, opacity: deletingId === p.id ? 0.5 : 1 }}>
+              {p.url ? (
+                <a href={p.url} target="_blank" rel="noopener noreferrer">
+                  <img src={p.url} alt="Job" style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', display: 'block' }} />
+                </a>
+              ) : (
+                <div style={{ width: 64, height: 64, borderRadius: 10, background: LIGHT.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ImageIcon size={16} color={LIGHT.sub} />
+                </div>
+              )}
+              <button
+                className="tap"
+                onClick={() => remove(p)}
+                disabled={deletingId === p.id}
+                style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, background: LIGHT.card, boxShadow: '0 1px 3px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Trash2 size={10} color={LIGHT.alert} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <ErrorText>{error}</ErrorText>
     </div>
   )
 }
