@@ -300,6 +300,8 @@ export type Database = {
           financing_enabled: boolean
           financing_partner_url: string | null
           financing_threshold: number
+          goal_target: number | null
+          goal_type: string | null
           google_review_link: string | null
           hourly_rate: number
           id: string
@@ -325,6 +327,8 @@ export type Database = {
           financing_enabled?: boolean
           financing_partner_url?: string | null
           financing_threshold?: number
+          goal_target?: number | null
+          goal_type?: string | null
           google_review_link?: string | null
           hourly_rate?: number
           id?: string
@@ -350,6 +354,8 @@ export type Database = {
           financing_enabled?: boolean
           financing_partner_url?: string | null
           financing_threshold?: number
+          goal_target?: number | null
+          goal_type?: string | null
           google_review_link?: string | null
           hourly_rate?: number
           id?: string
@@ -1139,6 +1145,84 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          body: string | null
+          company_id: string
+          created_at: string
+          customer_id: string | null
+          estimate_id: string | null
+          feedback_id: string | null
+          id: string
+          job_id: string | null
+          read_at: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          body?: string | null
+          company_id?: string
+          created_at?: string
+          customer_id?: string | null
+          estimate_id?: string | null
+          feedback_id?: string | null
+          id?: string
+          job_id?: string | null
+          read_at?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          body?: string | null
+          company_id?: string
+          created_at?: string
+          customer_id?: string | null
+          estimate_id?: string | null
+          feedback_id?: string | null
+          id?: string
+          job_id?: string | null
+          read_at?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "feedback"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nurture_campaigns: {
         Row: {
           active: boolean
@@ -1747,6 +1831,8 @@ export type Database = {
           financing_enabled: boolean
           financing_partner_url: string | null
           financing_threshold: number
+          goal_target: number | null
+          goal_type: string | null
           google_review_link: string | null
           hourly_rate: number
           id: string
@@ -1763,6 +1849,7 @@ export type Database = {
       }
       current_company_id: { Args: never; Returns: string }
       current_role: { Args: never; Returns: string }
+      flag_stale_estimates: { Args: never; Returns: undefined }
       is_super_admin: { Args: never; Returns: boolean }
       join_company: {
         Args: { p_join_code: string; p_name: string }
@@ -1778,6 +1865,8 @@ export type Database = {
           financing_enabled: boolean
           financing_partner_url: string | null
           financing_threshold: number
+          goal_target: number | null
+          goal_type: string | null
           google_review_link: string | null
           hourly_rate: number
           id: string

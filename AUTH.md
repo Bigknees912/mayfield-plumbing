@@ -1848,6 +1848,98 @@ prior completed job) rather than an empty state or error - this is
 supplementary context, not something worth interrupting the job detail
 screen over if the lookup is slow or fails.
 
+## Notification center, monthly goals & technician leaderboard
+
+Migration 054 (+ `054b`, a follow-up revoking EXECUTE on the four trigger
+functions below for a clean security advisor) adds three requested-together
+but architecturally separate pieces.
+
+**Notification center** (`src/dashboard/NotificationCenterModal.jsx`,
+opened from the bell icon in `AppShell.jsx`'s header, owner-only) replaces
+the scattered per-page banners - OwnerHome's inline negative-feedback
+banner, EstimatesPage's stale-estimate "Follow Up" banner - with one
+reverse-chronological feed backed by a new `notifications` table.
+
+- **Populated entirely server-side**, never by client code: four
+  `SECURITY DEFINER` triggers (`notify_job_assigned`, `notify_deposit_paid`,
+  `notify_invoice_paid`, `notify_negative_feedback`) plus a cron job
+  (`flag_stale_estimates()`, scheduled every 6h via
+  `cron.schedule('flag-stale-estimates-every-6h', ...)`, same shape as
+  `send_contract_reminders()`). `notifications` has no INSERT policy for
+  `authenticated` at all - rows only ever come from these
+  privilege-bypassing functions, the same pattern already used for
+  `mark_contract_serviced()`.
+- **Types covered**: `job_assigned` (a tech gets assigned/reassigned),
+  `payment_received` (a job's deposit is paid, or - forward-looking, see
+  below - an invoice is marked paid), `negative_feedback` (a `feedback`
+  row is inserted with `sentiment = 'negative'`), `estimate_stale` (an
+  estimate has sat at `status = 'sent'` for 48+ hours, guarded against
+  re-notifying the same estimate twice), and `review_left` - this last
+  type exists in the check constraint for forward compatibility but
+  **nothing populates it**: there's no Google review webhook/API
+  integration in this app (the review-request flow only sends an
+  outbound SMS with a link, see "Review-request SMS on job completion" -
+  it has no way to know if a review actually landed). Flagged, not built.
+- **`payment_received` is forward-looking on the invoice side**: the
+  trigger on `invoices.status` transitioning to `'paid'` is real and
+  tested, but (see "Not built yet") nothing currently writes an invoice
+  row, so in practice today this notification type only ever fires from
+  the `jobs.deposit_status` trigger. Free to have ready, same reasoning
+  as the Document Vault's invoice read-side.
+- **RLS**: `notifications_select`/`_update` are owner-only
+  (`"current_role"() = 'owner'`) and company-scoped - a tech signed in
+  gets an empty feed even though the bell button itself is already hidden
+  for them client-side (`AppShell.jsx`'s `{isOwner && ...}` gate is a UX
+  nicety, not the security boundary).
+- **Bell badge** (`AppShell.jsx`) keeps its own lightweight unread count
+  (`getUnreadNotificationCount()`, a `head: true` count query, not a full
+  row fetch) live via `useTableRealtime('notifications', ...)`, so it
+  updates even while the notification center itself is closed.
+- **Bug caught during verification, not before**: an early version of
+  the `id` uniqueness/positive-feedback test used a `feedback` insert
+  without an explicit `company_id` - `feedback.company_id` has no
+  column default (unlike most other tables' `default current_company_id()`),
+  so the RLS `WITH CHECK` silently rejected it. Not a schema bug (nothing
+  in the app relied on that default existing), just a test-writing
+  mistake worth remembering for next time a `feedback` row needs
+  inserting in a rolled-back test.
+
+**Monthly goal & Analytics page** - `companies.goal_type` (`'revenue'` or
+`'jobs'`, nullable) and `companies.goal_target` (numeric, nullable), set
+from a new "Monthly Goal" card in `SettingsPage.jsx` (one goal at a time -
+picking "No goal" clears both columns rather than leaving a stale target
+around unused). Read by a brand-new `src/dashboard/AnalyticsPage.jsx`
+(new `analytics` tab, owner-only) via `getMonthlyStats()` in
+`src/lib/analytics.js`, which computes jobs-completed/revenue/avg-job-value
+for the current calendar month from `jobs.price_high` in one query, then
+derives goal progress from whichever of those two numbers `goal_type`
+points at - so the goal bar and the supporting stat cards can never
+disagree about what "this month" contains. **`app-demo.jsx`'s charted
+"Insights" tab (revenue-over-time line, jobs-by-type bar) was not
+ported** - `recharts` isn't a dependency of this app yet, and this
+environment has no way to install a new package or verify its build
+(no `npm`/`node` available), so adding it now would be an unverified
+leap. `AnalyticsPage.jsx` intentionally starts lean: the goal bar plus
+plain `StatCard`s, no charting library. Revisit if/when a real dev
+environment can verify a `recharts` build.
+
+**Technician leaderboard** (`TeamPage.jsx`, above the per-tech parts-stock
+list) - jobs completed, average job value, and average time-to-complete
+for the current calendar month, per tech, via
+`listTechLeaderboardForMonth()` in `src/lib/analytics.js`. Time-to-complete
+is `completed_at` (on `jobs`) minus the earliest `job_status_events` row
+with `status = 'in_progress'` for that job - computed client-side from two
+small queries rather than a DB view or function, since the per-company
+monthly dataset is small and this keeps the aggregation logic visible
+without a second SQL surface to maintain. A tech with zero completed jobs
+this month still appears (zeros/dashes), so the leaderboard always
+matches the roster above it rather than silently dropping someone.
+
+**Bottom nav change**: 10 owner tabs (adding `team`, `analytics` this
+session and last) no longer fit at equal-flex width on a phone screen, so
+the tab bar now scrolls horizontally (`overflowX: 'auto'`, tabs pinned to
+a fixed `62px` width) instead of squeezing every icon proportionally.
+
 ## Not built yet (flagged in the schema, not implemented)
 
 - Invoice generation - the `invoices` table and the Document Vault's
@@ -1855,6 +1947,16 @@ screen over if the lookup is slow or fails.
   but nothing in the app writes an invoice row yet. The vault will show
   real invoices the moment something does; today that section is just
   empty.
+- Google review ingestion - the notification center's `review_left` type
+  exists in the schema for forward compatibility, but there's no Google
+  Business Profile API/webhook integration to detect an actual review
+  landing, so nothing ever populates it. The review-request SMS still
+  only sends a link, one-way.
+- Charted analytics (revenue-over-time, jobs-by-type) - `app-demo.jsx`'s
+  `recharts`-based Insights tab wasn't ported; `recharts` isn't a real
+  dependency yet and this dev environment can't install/verify a new
+  package. `AnalyticsPage.jsx` today is the goal bar + plain stat cards
+  only.
 - Stripe billing webhooks (subscriptions table exists, nothing populates
   `stripe_customer_id`/`stripe_subscription_id` yet beyond the `starter`
   default).

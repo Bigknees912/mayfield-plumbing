@@ -13,6 +13,7 @@ export default function SettingsPage({ company, onSaved }) {
     <>
       <SectionLabel>Settings</SectionLabel>
       <PricingRevenueSection company={company} onSaved={onSaved} />
+      <GoalsSection company={company} onSaved={onSaved} />
     </>
   )
 }
@@ -129,6 +130,65 @@ function PricingRevenueSection({ company, onSaved }) {
       <ErrorText>{error}</ErrorText>
       {saved && !error && <div style={{ fontSize: 12, color: LIGHT.success, marginBottom: 10 }}>Saved.</div>}
       <PrimaryButton onClick={save} disabled={loading} style={{ marginTop: 4 }}>{loading ? 'Saving…' : 'Save Changes'}</PrimaryButton>
+    </div>
+  )
+}
+
+// Read by AnalyticsPage.jsx's progress bar. One goal at a time - picking
+// "No goal" clears both columns rather than leaving a stale target
+// sitting around unused.
+function GoalsSection({ company, onSaved }) {
+  const [goalType, setGoalType] = useState(company?.goal_type || 'none')
+  const [goalTarget, setGoalTarget] = useState(company?.goal_target != null ? String(company.goal_target) : '')
+  const { loading, error, run, setError } = usePendingAction()
+  const [saved, setSaved] = useState(false)
+
+  function save() {
+    setSaved(false)
+    if (goalType === 'none') {
+      return run(async () => {
+        const updated = await updateCompanySettings(company.id, { goal_type: null, goal_target: null })
+        setSaved(true)
+        onSaved?.(updated)
+      })
+    }
+    const targetNum = num(goalTarget)
+    if (targetNum === null || targetNum <= 0) return setError('Enter a target greater than 0.')
+    run(async () => {
+      const updated = await updateCompanySettings(company.id, { goal_type: goalType, goal_target: targetNum })
+      setSaved(true)
+      onSaved?.(updated)
+    })
+  }
+
+  return (
+    <div style={{ background: LIGHT.card, borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', marginTop: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink, marginBottom: 4 }}>Monthly Goal</div>
+      <div style={{ fontSize: 12, color: LIGHT.sub, marginBottom: 16, lineHeight: 1.4 }}>
+        Shown as a progress bar on the Analytics tab. Pick one - revenue or job count, not both at once.
+      </div>
+
+      <FieldLabel>Goal type</FieldLabel>
+      <select
+        value={goalType}
+        onChange={(e) => setGoalType(e.target.value)}
+        style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}
+      >
+        <option value="none">No goal</option>
+        <option value="revenue">Monthly revenue</option>
+        <option value="jobs">Monthly jobs completed</option>
+      </select>
+
+      {goalType !== 'none' && (
+        <div style={{ marginBottom: 4 }}>
+          <FieldLabel>{goalType === 'revenue' ? 'Target revenue ($)' : 'Target job count'}</FieldLabel>
+          <TextInput value={goalTarget} onChange={setGoalTarget} placeholder={goalType === 'revenue' ? '40000' : '60'} />
+        </div>
+      )}
+
+      <ErrorText>{error}</ErrorText>
+      {saved && !error && <div style={{ fontSize: 12, color: LIGHT.success, marginBottom: 10 }}>Saved.</div>}
+      <PrimaryButton onClick={save} disabled={loading} style={{ marginTop: 4 }}>{loading ? 'Saving…' : 'Save Goal'}</PrimaryButton>
     </div>
   )
 }

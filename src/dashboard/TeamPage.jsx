@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Package } from 'lucide-react'
+import { Package, Trophy } from 'lucide-react'
 import { LIGHT } from '../theme'
-import { SectionLabel, ErrorState, LoadingState, EmptyState, initialsOf } from './ui'
+import { SectionLabel, ErrorState, LoadingState, EmptyState, initialsOf, money } from './ui'
 import { listTeamTechs } from '../lib/jobs'
 import { listParts, listTechPartStockMap, setTechPartStock } from '../lib/inventory'
+import { listTechLeaderboardForMonth, formatDuration } from '../lib/analytics'
 
 // Owner-only (matches every other AppShell tab besides Home/Calendar).
 // Each tech's card expands into their rough parts stock list - RLS
@@ -16,17 +17,19 @@ export default function TeamPage() {
   const [techs, setTechs] = useState(undefined)
   const [parts, setParts] = useState([])
   const [stockMap, setStockMap] = useState({})
+  const [leaderboard, setLeaderboard] = useState([])
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState(null)
 
   function load() {
     setError('')
     setTechs(undefined)
-    Promise.all([listTeamTechs(), listParts(), listTechPartStockMap()])
-      .then(([t, p, stock]) => {
+    Promise.all([listTeamTechs(), listParts(), listTechPartStockMap(), listTechLeaderboardForMonth()])
+      .then(([t, p, stock, board]) => {
         setTechs(t)
         setParts(p)
         setStockMap(stock)
+        setLeaderboard(board)
       })
       .catch((err) => setError(err.message || String(err)))
   }
@@ -56,6 +59,8 @@ export default function TeamPage() {
       {error && <ErrorState message={error} onRetry={load} />}
       {!error && techs === undefined && <LoadingState>Loading team…</LoadingState>}
       {techs && techs.length === 0 && <EmptyState>No team members yet. Share your join code to invite one.</EmptyState>}
+
+      {techs && techs.length > 0 && <Leaderboard techs={techs} leaderboard={leaderboard} />}
 
       {techs && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -109,6 +114,45 @@ export default function TeamPage() {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// Jobs completed, average job value, and average time-to-complete
+// (in_progress -> done, from job_status_events) per technician, for the
+// current calendar month - see listTechLeaderboardForMonth() in
+// lib/analytics.js. Ranked by jobs completed; a tech with zero completed
+// jobs this month still shows (all zeros/dashes) rather than being
+// dropped, so the list always matches the team roster above it.
+function Leaderboard({ techs, leaderboard }) {
+  const statsByTech = Object.fromEntries(leaderboard.map((row) => [row.techId, row]))
+  const ranked = [...techs].sort((a, b) => (statsByTech[b.id]?.jobsCompleted || 0) - (statsByTech[a.id]?.jobsCompleted || 0))
+
+  return (
+    <div style={{ background: LIGHT.card, borderRadius: 16, padding: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: LIGHT.ink, marginBottom: 12 }}>
+        <Trophy size={14} color={LIGHT.accent} /> This Month's Leaderboard
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {ranked.map((t, i) => {
+          const s = statsByTech[t.id]
+          return (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 18, fontSize: 12, fontWeight: 700, color: LIGHT.sub, textAlign: 'center', flexShrink: 0 }}>{i + 1}</div>
+              <div style={{ width: 30, height: 30, borderRadius: 15, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {initialsOf(t.name)}
+              </div>
+              <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: LIGHT.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: LIGHT.ink }}>{s?.jobsCompleted || 0} jobs</div>
+                <div style={{ fontSize: 10.5, color: LIGHT.sub }}>
+                  {s?.avgJobValue != null ? money(s.avgJobValue) : '—'} avg · {formatDuration(s?.avgDurationMs)} avg time
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
