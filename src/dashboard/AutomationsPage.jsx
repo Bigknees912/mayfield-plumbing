@@ -77,9 +77,9 @@ export default function AutomationsPage() {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <SectionLabel>Automations</SectionLabel>
+        <SectionLabel>Winback</SectionLabel>
         <button className="tap" onClick={() => setEditing(null)} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: LIGHT.accent, background: LIGHT.accentSoft, borderRadius: 8, padding: '6px 10px' }}>
-          <Plus size={13} /> New Automation
+          <Plus size={13} /> New Winback Rule
         </button>
       </div>
       <ErrorBanner message={error && hasLoadedOnce ? error : ''} onRetry={reload} />
@@ -114,7 +114,7 @@ export default function AutomationsPage() {
             </div>
           </div>
         ))}
-        {automations.length === 0 && <EmptyState>No automations yet. Tap "New Automation" to build one.</EmptyState>}
+        {automations.length === 0 && <EmptyState>No Winback rules yet. Tap "New Winback Rule" to build one.</EmptyState>}
       </div>
 
       {editing !== undefined && (
@@ -195,7 +195,7 @@ function AutomationFormModal({ automation, onClose, onSaved }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 20 }} onClick={onClose}>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 20, maxWidth: 420, width: '100%', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>{isEdit ? 'Edit Automation' : 'New Automation'}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>{isEdit ? 'Edit Winback Rule' : 'New Winback Rule'}</div>
           <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
         </div>
 
@@ -274,7 +274,7 @@ function AutomationFormModal({ automation, onClose, onSaved }) {
 
         <ErrorText>{error}</ErrorText>
         <PrimaryButton onClick={submit} disabled={!canSubmit}>
-          {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Automation'}
+          {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Winback Rule'}
         </PrimaryButton>
       </div>
     </div>

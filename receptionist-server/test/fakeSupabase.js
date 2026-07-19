@@ -8,10 +8,11 @@ const { randomUUID } = require("node:crypto");
 // comment on why these functions accept an injectable client.
 
 class FakeQueryBuilder {
-  constructor(table, op, payload) {
+  constructor(table, op, payload, tableName) {
     this.table = table; // { rows: [...] }
     this.op = op; // 'select' | 'insert' | 'update'
     this.payload = payload;
+    this.tableName = tableName;
     this.filters = [];
     this._selectCalled = false;
     this._single = false;
@@ -64,6 +65,23 @@ class FakeQueryBuilder {
       return { data: rows, error: null };
     }
     if (this.op === "insert") {
+      // Mirrors jobs_no_double_booking_idx (migration 048): a real
+      // Postgres unique-violation (23505) if two non-cancelled, dated
+      // jobs land on the same company/date/window - lets
+      // booking.test.js exercise the race-condition error branch without
+      // a live database.
+      if (this.tableName === "jobs" && this.payload.scheduled_date && this.payload.status !== "cancelled") {
+        const clashes = this.table.rows.some(
+          (r) =>
+            r.company_id === this.payload.company_id &&
+            r.scheduled_date === this.payload.scheduled_date &&
+            r.scheduled_window === this.payload.scheduled_window &&
+            r.status !== "cancelled"
+        );
+        if (clashes) {
+          return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint \"jobs_no_double_booking_idx\"" } };
+        }
+      }
       const row = { id: randomUUID(), created_at: new Date().toISOString(), ...this.payload };
       this.table.rows.push(row);
       if (this._selectCalled) {
@@ -111,9 +129,9 @@ function createFakeSupabase(seed = {}) {
       if (!tables[name]) tables[name] = { rows: [] };
       const table = tables[name];
       return {
-        select: (cols) => new FakeQueryBuilder(table, "select").select(cols),
-        insert: (obj) => new FakeQueryBuilder(table, "insert", obj),
-        update: (obj) => new FakeQueryBuilder(table, "update", obj),
+        select: (cols) => new FakeQueryBuilder(table, "select", undefined, name).select(cols),
+        insert: (obj) => new FakeQueryBuilder(table, "insert", obj, name),
+        update: (obj) => new FakeQueryBuilder(table, "update", obj, name),
       };
     },
   };

@@ -1655,6 +1655,74 @@ for one specific client, not a template to commit). Requires
 environment (see root `.env.example`); this script isn't part of the Vite
 build, it runs standalone via `npm run generate-marketing-site`.
 
+## Estimates & financing
+
+A quote doesn't need to become a job to be worth tracking - the Estimates
+tab (owner-only) exists specifically for the quote that never got a yes,
+separate from the Jobs board's live tickets.
+
+**`estimates`** (migration 051) is the single source of truth for every
+quote, regardless of where it came from:
+
+- **PickUp-sourced** (`source = 'phone_ai'`): `receptionist-server/lib/
+  booking.js`'s `recordQuote()` upserts a row (keyed by `call_id`) every
+  time `get_quote` runs, denormalizing `customer_phone` alongside the
+  nullable `customer_id` FK - a caller who's quoted but never gives their
+  name still gets a real estimate row with a phone number the Follow Up
+  prompt can call/text, since a customer record is deliberately *not*
+  created just from being quoted (only from actually booking). Re-quoting
+  the same call (caller asks "what about X instead") updates the same row
+  rather than creating a second one. When `createBooking()` succeeds,
+  it marks the matching estimate `accepted` and sets its `job_id` - the
+  quote-to-booking loop closes itself with no dashboard action needed.
+- **Manual** (`source = 'manual'`): entered directly on the Estimates
+  page (`src/dashboard/EstimatesPage.jsx`), reusing `findOrCreateCustomer`
+  so a manual estimate always has a real `customer_id` from the start.
+
+**Status** is one of `sent` / `viewed` / `accepted` / `declined`.
+`sent` is automatic (set the moment an estimate is created - no customer
+action required to reach it). The other three are **owner-set**, not
+auto-detected - there's no customer-facing "view your estimate" link in
+this app yet, so "Viewed" reflects what the owner learned from following
+up, not a tracked click. Worth knowing before assuming more automation
+exists than actually does.
+
+**Follow Up (48 hours)**: `src/lib/estimates.js`'s `isStale()` flags any
+estimate still sitting at `sent` more than 48 hours after `created_at`.
+`EstimatesPage.jsx` surfaces these in a dedicated banner at the top of the
+page (not just a badge buried in the list) with one-tap `tel:`/`sms:`
+buttons (`callHref`/`textHref`) - these open the device's own phone/
+messaging app with the customer's number, they don't send anything
+automatically. No prefilled SMS body: iOS and Android disagree on whether
+that's `?body=` or `&body=`, and silently dropping the param on one
+platform felt worse than not trying.
+
+**Convert to Job**: an accepted estimate with no `job_id` yet gets a
+"Convert to Job" button, which calls `lib/jobs.js`'s `createJob` directly
+(same insert every other booking path uses) pre-filled from the estimate's
+price/job type/customer, then links `job_id` back. If the estimate has no
+linked customer (a PickUp quote nobody ever gave a name for), the convert
+flow collects one first via `findOrCreateCustomer` before creating the
+job.
+
+**Financing**: `companies.financing_enabled` / `financing_threshold`
+(default $1,500) / `financing_partner_url` (Settings → Pricing & Revenue,
+`SettingsPage.jsx`). When enabled, any estimate whose price clears the
+threshold (`financingApplies()`) shows an "Ask about financing" note with
+an outbound link to whatever partner the owner already has an account
+with (Wisetack, Affirm, etc.) - this is a link-out, not a payment
+integration; no partner API credentials are involved anywhere in this
+app.
+
+**Settings page** (`SettingsPage.jsx`) is new and currently holds only
+the Pricing & Revenue section - the `companies` pricing columns (base
+fee, hourly rate, urgency multipliers, deposit threshold/%, commission %)
+existed since the very first schema pass but had no edit UI at all until
+now. `AppShell.jsx` keeps a local, owner-updatable copy of the `company`
+object (seeded from `profile.companies`) so a Settings save is reflected
+immediately across every other tab in the same session, without a full
+profile refetch.
+
 ## Not built yet (flagged in the schema, not implemented)
 
 - Job photo attachments / Supabase Storage buckets.
@@ -1669,6 +1737,14 @@ build, it runs standalone via `npm run generate-marketing-site`.
   edits the feature list a plan displays, but nothing in the dashboard
   currently checks "does this company's plan include X" before showing a
   feature. `plans.features` is display-only today.
+- A customer-facing "view your estimate" link/portal — the Estimates
+  page's "Viewed" status is owner-set, not auto-detected from a real
+  customer click, because that page doesn't exist. Building it (a public
+  token-based estimate view + a status-update write) would be the natural
+  next step if "Viewed" needs to mean something more than "the owner
+  marked it viewed."
+- A dedicated Team/General/Integrations section on the Settings page -
+  only Pricing & Revenue exists so far.
 - Stripe `Price` syncing for admin-edited plan prices — `admin_upsert_plan`
   has a `stripe_price_id` column to fill in, but changing `monthly_price`
   in the admin panel doesn't push anything to Stripe; a paid plan's actual

@@ -73,6 +73,7 @@ function PlanCard({ plan, isNew, onMoveUp, onMoveDown, onSaved, onCancel }) {
   const [name, setName] = useState(plan?.name || '')
   const [key, setKey] = useState(plan?.key || '')
   const [price, setPrice] = useState(plan ? String(plan.monthly_price) : '0')
+  const [seatLimit, setSeatLimit] = useState(plan?.seat_limit != null ? String(plan.seat_limit) : '')
   const [active, setActive] = useState(plan ? plan.active : true)
   const [features, setFeatures] = useState(plan?.features?.length ? plan.features : [])
   const [newFeature, setNewFeature] = useState('')
@@ -100,8 +101,13 @@ function PlanCard({ plan, isNew, onMoveUp, onMoveDown, onSaved, onCancel }) {
     if (!name.trim()) return setError('Plan name is required.')
     const priceNum = Number(price)
     if (Number.isNaN(priceNum) || priceNum < 0) return setError('Enter a valid monthly price.')
+    let seatLimitNum = null
+    if (seatLimit.trim() !== '') {
+      seatLimitNum = Number(seatLimit)
+      if (!Number.isInteger(seatLimitNum) || seatLimitNum <= 0) return setError('Seat limit must be a whole number greater than 0, or blank for unlimited.')
+    }
     run(async () => {
-      await upsertPlan({ key: key.trim().toLowerCase(), name: name.trim(), monthlyPrice: priceNum, features, active })
+      await upsertPlan({ key: key.trim().toLowerCase(), name: name.trim(), monthlyPrice: priceNum, features, active, seatLimit: seatLimitNum })
       onSaved()
     })
   }
@@ -126,7 +132,7 @@ function PlanCard({ plan, isNew, onMoveUp, onMoveDown, onSaved, onCancel }) {
           </div>
         )}
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: isNew ? '1fr 1fr 1fr' : '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isNew ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
             {isNew && (
               <div>
                 <FieldLabel>Key</FieldLabel>
@@ -141,6 +147,13 @@ function PlanCard({ plan, isNew, onMoveUp, onMoveDown, onSaved, onCancel }) {
               <FieldLabel>Monthly price ($)</FieldLabel>
               <TextInput value={price} onChange={setPrice} placeholder="299" />
             </div>
+            <div>
+              <FieldLabel>Seat limit (blank = unlimited)</FieldLabel>
+              <TextInput value={seatLimit} onChange={setSeatLimit} placeholder="e.g. 10" />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: LIGHT.sub, marginTop: -6, marginBottom: 10 }}>
+            Total team members (owner + techs) a company on this plan may have. Enforced server-side when joining via a code.
           </div>
 
           <FieldLabel>Features</FieldLabel>

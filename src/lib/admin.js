@@ -50,7 +50,7 @@ export async function listPlansAdmin() {
   return data
 }
 
-export async function upsertPlan({ key, name, monthlyPrice, features, displayOrder, active }) {
+export async function upsertPlan({ key, name, monthlyPrice, features, displayOrder, active, seatLimit }) {
   const { data, error } = await supabase.rpc('admin_upsert_plan', {
     p_key: key,
     p_name: name,
@@ -58,6 +58,7 @@ export async function upsertPlan({ key, name, monthlyPrice, features, displayOrd
     p_features: features || [],
     p_display_order: displayOrder ?? null,
     p_active: active ?? true,
+    p_seat_limit: seatLimit ?? null,
   })
   if (error) throw error
   return data

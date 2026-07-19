@@ -22,6 +22,9 @@ export default function EmployeeJoinScreen({ onBack, onDone }) {
         if (err.message.includes('invalid join code')) {
           throw new Error("That join code doesn't match any company. Double-check with your employer.")
         }
+        if (err.message.includes('seat_limit_reached')) {
+          throw new Error("This company's plan is at its team-member limit. Ask your employer to upgrade their plan before you can join.")
+        }
         throw err
       }
     })

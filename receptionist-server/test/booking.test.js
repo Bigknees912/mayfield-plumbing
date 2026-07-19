@@ -79,6 +79,45 @@ test("createBooking: rejects a structured slot that's already booked, and doesn'
   assert.equal(fake.table("jobs").rows.length, 1);
 });
 
+test("createBooking: a 23505 unique-violation on the jobs insert (the real race - two calls both pass the pre-check, DB constraint catches the loser) is translated into the same graceful 'slot taken' response, not thrown", async () => {
+  // The SELECT-based pre-check above only narrows the race window, it
+  // can't close it (classic check-then-insert race) - jobs_no_double_
+  // booking_idx (migration 048) is the real guard. To exercise that
+  // specific code path without a live database or true concurrency, this
+  // wraps the fake so the pre-check reports no conflict (simulating "this
+  // caller's pre-check ran first and found nothing"), but the insert
+  // itself still hits the constraint (simulating "the other caller's
+  // insert landed in between").
+  const slot = buildCandidates("standard")[0];
+  const fake = createFakeSupabase();
+  const realFrom = fake.from.bind(fake);
+  fake.from = (name) => {
+    const builder = realFrom(name);
+    if (name !== "jobs") return builder;
+    return {
+      ...builder,
+      insert: (obj) => {
+        const qb = builder.insert(obj);
+        qb.then = (resolve) => resolve({ data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } });
+        return qb;
+      },
+    };
+  };
+
+  const result = await createBooking({
+    companyId: COMPANY_ID,
+    slot: slot.label,
+    jobType: "drain",
+    address: "789 Pine Rd",
+    customerPhone: "+15551112222",
+    customerName: "New Caller",
+    supabaseClient: fake,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /taken/i);
+});
+
 test("createBooking: a cancelled job at the same slot doesn't block a new booking", async () => {
   const slot = buildCandidates("standard")[0];
   const fake = createFakeSupabase({
@@ -185,4 +224,46 @@ test("createBooking: picks up urgency and quote price from the call record, and 
 
   const call = fake.table("calls").rows.find((c) => c.id === "call-1");
   assert.equal(call.outcome, "booked");
+});
+
+test("createBooking: marks the matching estimate accepted and links it to the new job, closing the Estimates-page loop", async () => {
+  const slot = buildCandidates("standard")[0];
+  const fake = createFakeSupabase({
+    calls: [{ id: "call-2", vapi_call_id: "vapi-xyz", urgency: "standard", quote_low: 260, quote_high: 310, outcome: "quoted" }],
+    estimates: [{ id: "estimate-1", company_id: COMPANY_ID, call_id: "call-2", status: "sent", price_low: 260, price_high: 310 }],
+  });
+
+  const result = await createBooking({
+    companyId: COMPANY_ID,
+    vapiCallId: "vapi-xyz",
+    slot: slot.label,
+    jobType: "drain",
+    address: "9 Birch St",
+    customerPhone: "+15556667777",
+    customerName: "Estimate Tester",
+    supabaseClient: fake,
+  });
+
+  assert.equal(result.ok, true);
+  const estimate = fake.table("estimates").rows.find((e) => e.id === "estimate-1");
+  assert.equal(estimate.status, "accepted");
+  assert.equal(estimate.job_id, result.job.id);
+});
+
+test("createBooking: a caller who never got a prior quote (no vapiCallId) books fine with no estimate to link - not an error", async () => {
+  const fake = createFakeSupabase();
+  const slot = buildCandidates("standard")[0];
+
+  const result = await createBooking({
+    companyId: COMPANY_ID,
+    slot: slot.label,
+    jobType: "drain",
+    address: "1 No Call Ln",
+    customerPhone: "+15559990000",
+    customerName: "No Prior Quote",
+    supabaseClient: fake,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(fake.table("estimates").rows.length, 0);
 });

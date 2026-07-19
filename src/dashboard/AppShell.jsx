@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Home, KanbanSquare, Calendar, BookUser, Zap, ClipboardList, LogOut } from 'lucide-react'
+import { Home, KanbanSquare, Calendar, BookUser, Zap, ClipboardList, Receipt, Settings as SettingsIcon, LogOut } from 'lucide-react'
 import { LIGHT } from '../theme'
 import { GlobalStyle } from '../auth/ui'
 import { ErrorBanner } from './ui'
@@ -10,32 +10,40 @@ import CalendarPage from './CalendarPage'
 import ClientsPage from './ClientsPage'
 import AutomationsPage from './AutomationsPage'
 import ServiceCatalogPage from './ServiceCatalogPage'
+import EstimatesPage from './EstimatesPage'
+import SettingsPage from './SettingsPage'
 import TechHome from './TechHome'
 
 const OWNER_TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'jobs', label: 'Jobs', icon: KanbanSquare },
+  { id: 'estimates', label: 'Estimates', icon: Receipt },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'clients', label: 'Clients', icon: BookUser },
   { id: 'catalog', label: 'Services', icon: ClipboardList },
-  { id: 'automations', label: 'Automations', icon: Zap },
+  { id: 'automations', label: 'Winback', icon: Zap },
+  { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
 const TECH_TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
 ]
 
-// Trimmed-down version of app-demo.jsx's AppShell: only Home, Jobs,
-// Calendar, Clients, and Automations are wired to real data so far, so
-// those are the only tabs shown. Map, Insights, Team, and Settings from
-// the demo aren't part of this pass.
+// Trimmed-down version of app-demo.jsx's AppShell: Map, Insights, and Team
+// from the demo aren't wired up yet. Settings currently only has a
+// Pricing & Revenue section (see SettingsPage.jsx) - Team/General/
+// Integrations aren't built.
 export default function AppShell({ session, profile, onSignOut }) {
   const [tab, setTab] = useState('home')
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState('')
   const isOwner = profile.role === 'owner'
   const tabs = isOwner ? OWNER_TABS : TECH_TABS
-  const company = profile.companies
+  // Local, updatable copy of the company row: SettingsPage writes changes
+  // straight into companies (Pricing & Revenue, financing), and every
+  // other tab on this screen should see the new numbers immediately
+  // without a full profile refetch/re-login.
+  const [company, setCompany] = useState(profile.companies)
   const TradeIcon = tradeIcon(company?.trade)
 
   async function handleSignOut() {
@@ -75,10 +83,12 @@ export default function AppShell({ session, profile, onSignOut }) {
         {tab === 'home' && isOwner && <OwnerHome businessProfile={company} />}
         {tab === 'home' && !isOwner && <TechHome techId={session.user.id} />}
         {tab === 'jobs' && isOwner && <JobsBoard company={company} />}
+        {tab === 'estimates' && isOwner && <EstimatesPage company={company} />}
         {tab === 'calendar' && <CalendarPage myTechId={isOwner ? null : session.user.id} />}
         {tab === 'clients' && isOwner && <ClientsPage company={company} />}
         {tab === 'catalog' && isOwner && <ServiceCatalogPage company={company} />}
         {tab === 'automations' && isOwner && <AutomationsPage />}
+        {tab === 'settings' && isOwner && <SettingsPage company={company} onSaved={setCompany} />}
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: LIGHT.card, borderTop: `1px solid ${LIGHT.border}`, display: 'flex', justifyContent: 'center', padding: '8px 0 max(8px, env(safe-area-inset-bottom))' }}>

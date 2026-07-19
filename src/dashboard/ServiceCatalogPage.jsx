@@ -35,7 +35,7 @@ export default function ServiceCatalogPage({ company }) {
         )}
       </div>
       <div style={{ fontSize: 12, color: LIGHT.sub, marginBottom: 16, lineHeight: 1.4 }}>
-        These services show up when creating a job and drive the AI receptionist's quotes, if it's on your plan.
+        These services show up when creating a job and drive PickUp's quotes, if it's on your plan.
         Leave hourly rate blank to use your company default ({money(company?.hourly_rate)}/hr).
       </div>
 

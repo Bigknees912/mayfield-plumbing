@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { signInWithPassword, signInWithGoogle } from '../lib/auth'
 import { AuthShell, GoogleG, FieldLabel, TextInput, PrimaryButton, ErrorText, LIGHT, usePendingAction } from './ui'
 
-export default function LoginScreen({ onSignup }) {
+export default function LoginScreen({ onSignup, onForgotPassword }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const { loading, error, run } = usePendingAction()
@@ -34,6 +34,9 @@ export default function LoginScreen({ onSignup }) {
         <PrimaryButton onClick={submit} disabled={loading || !email || !password}>
           {loading ? 'Signing in…' : 'Sign In'}
         </PrimaryButton>
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <span className="tap" onClick={onForgotPassword} style={{ fontSize: 12.5, color: LIGHT.sub }}>Forgot password?</span>
+        </div>
       </div>
       <div style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: LIGHT.sub }}>
         New here? <span className="tap" onClick={onSignup} style={{ color: LIGHT.accent, fontWeight: 700 }}>Create an account</span>

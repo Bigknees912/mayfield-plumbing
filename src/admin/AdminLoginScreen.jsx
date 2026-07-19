@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { signInWithPassword, signUpWithPassword } from '../lib/auth'
 import { AuthShell, FieldLabel, TextInput, PrimaryButton, ErrorText, LIGHT, usePendingAction } from '../auth/ui'
+import ForgotPasswordScreen from '../auth/ForgotPasswordScreen'
 
 // Deliberately separate from LoginScreen.jsx (the regular company
 // sign-in): no "I'm starting a new business" / "I'm joining a team"
@@ -10,7 +11,7 @@ import { AuthShell, FieldLabel, TextInput, PrimaryButton, ErrorText, LIGHT, useP
 // is_super_admin() and rejects anyone not in the super_admins table, so
 // reaching this screen (even guessing the URL) grants nothing by itself.
 export default function AdminLoginScreen() {
-  const [mode, setMode] = useState('signin') // signin | signup | check-email
+  const [mode, setMode] = useState('signin') // signin | signup | check-email | forgot-password
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const { loading, error, run, setError } = usePendingAction()
@@ -29,6 +30,10 @@ export default function AdminLoginScreen() {
       }
       // onAuthStateChange in SuperAdminApp picks up the new session from here.
     })
+  }
+
+  if (mode === 'forgot-password') {
+    return <ForgotPasswordScreen onBack={() => setMode('signin')} />
   }
 
   if (mode === 'check-email') {
@@ -66,6 +71,15 @@ export default function AdminLoginScreen() {
       >
         {mode === 'signup' ? 'Already have an account? Sign in' : 'Bootstrapping the first admin account? Create one'}
       </button>
+      {mode === 'signin' && (
+        <button
+          className="tap"
+          onClick={() => { setMode('forgot-password'); setError('') }}
+          style={{ display: 'block', margin: '8px auto 0', fontSize: 12, color: LIGHT.sub }}
+        >
+          Forgot password?
+        </button>
+      )}
     </AuthShell>
   )
 }

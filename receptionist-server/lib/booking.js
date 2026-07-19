@@ -1,5 +1,6 @@
 const { getSupabase } = require("./supabase");
 const { resolveSlot } = require("./scheduling");
+const { withRetry } = require("./retry");
 
 // Every function below takes its Supabase client as a parameter (default:
 // the real one from getSupabase()) rather than calling getSupabase()
@@ -18,6 +19,51 @@ async function getJobType(supabase, companyId, key) {
     .maybeSingle();
   if (error) throw error;
   return data;
+}
+
+/**
+ * Upserts an `estimates` row keyed by this call's id every time a quote is
+ * given, so it shows up on the dashboard's Estimates page even if the
+ * caller never books - a quote that goes unanswered is exactly what that
+ * page's 48-hour Follow Up prompt exists to catch. Keyed on call id (not
+ * vapi_call_id directly) since it links back to the `calls` row via FK,
+ * same relationship jobs.call_id already uses. Non-fatal, same reasoning
+ * as recordQuote itself - a logging hiccup here must never break a live
+ * call's ability to get a price.
+ */
+async function upsertEstimateForCall(supabase, companyId, callId, { customerPhone, jobTypeRow, quote }) {
+  if (!callId) return;
+  try {
+    let customerId = null;
+    if (customerPhone) {
+      const { data: existing } = await supabase
+        .from("customers")
+        .select("id, name")
+        .eq("company_id", companyId)
+        .eq("phone", customerPhone)
+        .maybeSingle();
+      customerId = existing?.id || null;
+    }
+    const patch = {
+      company_id: companyId,
+      call_id: callId,
+      customer_id: customerId,
+      customer_phone: customerPhone || null,
+      job_type_id: jobTypeRow?.id || null,
+      description: jobTypeRow?.label || null,
+      price_low: quote.low,
+      price_high: quote.high,
+      source: "phone_ai",
+    };
+    const { data: existingEstimate } = await supabase.from("estimates").select("id").eq("call_id", callId).maybeSingle();
+    if (existingEstimate) {
+      await supabase.from("estimates").update(patch).eq("id", existingEstimate.id);
+    } else {
+      await supabase.from("estimates").insert({ ...patch, status: "sent" });
+    }
+  } catch (err) {
+    console.error("upsertEstimateForCall failed (non-fatal, call continues):", err.message);
+  }
 }
 
 /**
@@ -44,11 +90,14 @@ async function recordQuote({ companyId, vapiCallId, customerPhone, jobType, urge
       outcome: "quoted",
     };
     const { data: existing } = await supabase.from("calls").select("id").eq("vapi_call_id", vapiCallId).maybeSingle();
+    let callId = existing?.id;
     if (existing) {
       await supabase.from("calls").update(patch).eq("id", existing.id);
     } else {
-      await supabase.from("calls").insert({ ...patch, vapi_call_id: vapiCallId });
+      const { data: created } = await supabase.from("calls").insert({ ...patch, vapi_call_id: vapiCallId }).select("id").single();
+      callId = created?.id;
     }
+    await upsertEstimateForCall(supabase, companyId, callId, { customerPhone, jobTypeRow, quote });
   } catch (err) {
     console.error("recordQuote failed (non-fatal, call continues):", err.message);
   }
@@ -132,12 +181,16 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
     // pipeline_stage: "booked" - a job is being created in the same
     // request, same convention as the dashboard app's findOrCreateCustomer
     // (src/lib/jobs.js). Only applies to a brand-new customer; an existing
-    // match's stage above is left untouched.
-    const { data: created, error: createError } = await supabase
-      .from("customers")
-      .insert({ company_id: companyId, name: customerName || "Phone caller", phone: customerPhone || null, address, pipeline_stage: "booked" })
-      .select("id")
-      .single();
+    // match's stage above is left untouched. Wrapped in withRetry - a
+    // booking made live over the phone has no "try again" button, so a
+    // momentary network blip here shouldn't lose it.
+    const { data: created, error: createError } = await withRetry(() =>
+      supabase
+        .from("customers")
+        .insert({ company_id: companyId, name: customerName || "Phone caller", phone: customerPhone || null, address, pipeline_stage: "booked" })
+        .select("id")
+        .single()
+    );
     if (createError) throw createError;
     customerId = created.id;
   }
@@ -146,29 +199,52 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
 
   const jobTypeRow = await getJobType(supabase, companyId, jobType);
 
-  const { data: job, error: jobError } = await supabase
-    .from("jobs")
-    .insert({
-      company_id: companyId,
-      customer_id: customerId,
-      job_type_id: jobTypeRow?.id || null,
-      description: jobTypeRow?.label || jobType,
-      address,
-      urgency,
-      status: "unassigned",
-      scheduled_date: resolved?.date || null,
-      scheduled_window: resolved?.window || slot,
-      price_low: call?.quote_low ?? null,
-      price_high: call?.quote_high ?? null,
-      source: "phone_ai",
-      call_id: call?.id || null,
-    })
-    .select()
-    .single();
-  if (jobError) throw jobError;
+  // jobs_no_double_booking_idx (migration 048) is the real guard against
+  // two concurrent calls booking the same slot - the SELECT check above
+  // narrows the race window but can't close it (classic check-then-insert
+  // race), so a 23505 unique-violation here means someone else's booking
+  // won the race in the gap between that check and this insert. That's
+  // not a transient failure (retrying would just hit the same conflict
+  // again), so it's handled before withRetry ever sees it.
+  const { data: job, error: jobError } = await withRetry(() =>
+    supabase
+      .from("jobs")
+      .insert({
+        company_id: companyId,
+        customer_id: customerId,
+        job_type_id: jobTypeRow?.id || null,
+        description: jobTypeRow?.label || jobType,
+        address,
+        urgency,
+        status: "unassigned",
+        scheduled_date: resolved?.date || null,
+        scheduled_window: resolved?.window || slot,
+        price_low: call?.quote_low ?? null,
+        price_high: call?.quote_high ?? null,
+        source: "phone_ai",
+        call_id: call?.id || null,
+      })
+      .select()
+      .single()
+  );
+  if (jobError) {
+    if (jobError.code === "23505") {
+      return { ok: false, reason: "That slot was just taken. Please offer the next available one." };
+    }
+    throw jobError;
+  }
 
   if (call) {
     await supabase.from("calls").update({ outcome: "booked", address, ended_at: new Date().toISOString() }).eq("id", call.id);
+    // Closes the loop on the Estimates page: the quote given earlier in
+    // this same call just turned into a real booking, so it's no longer
+    // sitting unfollowed-up - non-fatal, a booking that already succeeded
+    // must never fail because this bookkeeping update didn't.
+    try {
+      await supabase.from("estimates").update({ status: "accepted", job_id: job.id, status_changed_at: new Date().toISOString() }).eq("call_id", call.id);
+    } catch (err) {
+      console.error("linking estimate to booked job failed (non-fatal):", err.message);
+    }
   }
 
   return { ok: true, job };

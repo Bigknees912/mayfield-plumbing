@@ -297,6 +297,9 @@ export type Database = {
           deposit_pct: number
           deposit_threshold: number
           emergency_multiplier: number
+          financing_enabled: boolean
+          financing_partner_url: string | null
+          financing_threshold: number
           google_review_link: string | null
           hourly_rate: number
           id: string
@@ -319,6 +322,9 @@ export type Database = {
           deposit_pct?: number
           deposit_threshold?: number
           emergency_multiplier?: number
+          financing_enabled?: boolean
+          financing_partner_url?: string | null
+          financing_threshold?: number
           google_review_link?: string | null
           hourly_rate?: number
           id?: string
@@ -341,6 +347,9 @@ export type Database = {
           deposit_pct?: number
           deposit_threshold?: number
           emergency_multiplier?: number
+          financing_enabled?: boolean
+          financing_partner_url?: string | null
+          financing_threshold?: number
           google_review_link?: string | null
           hourly_rate?: number
           id?: string
@@ -529,6 +538,96 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estimates: {
+        Row: {
+          call_id: string | null
+          company_id: string
+          created_at: string
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          description: string | null
+          id: string
+          job_id: string | null
+          job_type_id: string | null
+          price_high: number | null
+          price_low: number | null
+          source: string
+          status: string
+          status_changed_at: string
+        }
+        Insert: {
+          call_id?: string | null
+          company_id?: string
+          created_at?: string
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          description?: string | null
+          id?: string
+          job_id?: string | null
+          job_type_id?: string | null
+          price_high?: number | null
+          price_low?: number | null
+          source?: string
+          status?: string
+          status_changed_at?: string
+        }
+        Update: {
+          call_id?: string | null
+          company_id?: string
+          created_at?: string
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          description?: string | null
+          id?: string
+          job_id?: string | null
+          job_type_id?: string | null
+          price_high?: number | null
+          price_low?: number | null
+          source?: string
+          status?: string
+          status_changed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimates_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_job_type_id_fkey"
+            columns: ["job_type_id"]
+            isOneToOne: false
+            referencedRelation: "job_types"
             referencedColumns: ["id"]
           },
         ]
@@ -989,6 +1088,7 @@ export type Database = {
           key: string
           monthly_price: number
           name: string
+          seat_limit: number | null
           stripe_price_id: string | null
           updated_at: string
         }
@@ -1000,6 +1100,7 @@ export type Database = {
           key: string
           monthly_price?: number
           name: string
+          seat_limit?: number | null
           stripe_price_id?: string | null
           updated_at?: string
         }
@@ -1011,6 +1112,7 @@ export type Database = {
           key?: string
           monthly_price?: number
           name?: string
+          seat_limit?: number | null
           stripe_price_id?: string | null
           updated_at?: string
         }
@@ -1418,6 +1520,9 @@ export type Database = {
           deposit_pct: number
           deposit_threshold: number
           emergency_multiplier: number
+          financing_enabled: boolean
+          financing_partner_url: string | null
+          financing_threshold: number
           google_review_link: string | null
           hourly_rate: number
           id: string
@@ -1446,6 +1551,9 @@ export type Database = {
           deposit_pct: number
           deposit_threshold: number
           emergency_multiplier: number
+          financing_enabled: boolean
+          financing_partner_url: string | null
+          financing_threshold: number
           google_review_link: string | null
           hourly_rate: number
           id: string

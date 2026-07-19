@@ -30,6 +30,27 @@ export async function signOut() {
   if (error) throw error
 }
 
+// Sends a password-reset email. Supabase always resolves this (it never
+// reveals whether the address has an account, to avoid leaking which
+// emails are registered), so the UI should show the same "check your
+// email" message regardless of the outcome. Clicking the emailed link
+// lands back on this app with a recovery session already established and
+// fires a 'PASSWORD_RECOVERY' auth event - see App.jsx.
+export async function resetPasswordForEmail(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  })
+  if (error) throw error
+}
+
+// Sets a new password for the currently-authenticated session - only
+// meaningful right after a PASSWORD_RECOVERY event, which is the one time
+// a session exists without the user having "really" signed in.
+export async function updatePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw error
+}
+
 // Returns the caller's profile row (joined with their company), or null if
 // they're authenticated but haven't finished company setup yet.
 export async function fetchProfile(userId) {

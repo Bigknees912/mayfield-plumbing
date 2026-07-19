@@ -55,7 +55,7 @@ export default function OwnerHome({ businessProfile }) {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-        <StatCard icon={PhoneIncoming} label="Calls Today" value={stats.callsTodayCount} sub="from the AI receptionist" />
+        <StatCard icon={PhoneIncoming} label="Calls Today" value={stats.callsTodayCount} sub="from PickUp" />
         <StatCard icon={CheckCircle2} label="Completed Today" value={stats.completedTodayCount} subColor={LIGHT.success} />
         <StatCard icon={CalendarCheck} label="In Motion" value={stats.inMotionCount} sub={money(stats.inMotionValue)} subColor={LIGHT.success} />
         <StatCard icon={TrendingUp} label="Needs Assignment" value={stats.unassignedCount} sub={stats.unassignedCount > 0 ? 'tap Jobs to assign' : undefined} subColor={LIGHT.alert} />

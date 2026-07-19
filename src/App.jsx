@@ -4,6 +4,8 @@ import { fetchProfile, signOut } from './lib/auth'
 import LoginScreen from './auth/LoginScreen'
 import SignupScreen from './auth/SignupScreen'
 import CheckEmailScreen from './auth/CheckEmailScreen'
+import ForgotPasswordScreen from './auth/ForgotPasswordScreen'
+import ResetPasswordScreen from './auth/ResetPasswordScreen'
 import RoleChoiceScreen from './auth/RoleChoiceScreen'
 import PlanSelectionScreen from './auth/PlanSelectionScreen'
 import OwnerOnboardingScreen from './auth/OwnerOnboardingScreen'
@@ -29,10 +31,11 @@ export default function App() {
   const [profile, setProfile] = useState(undefined)
   const [profileError, setProfileError] = useState('')
   const [refreshError, setRefreshError] = useState('')
-  const [preAuthScreen, setPreAuthScreen] = useState('login') // login | signup | check-email
+  const [preAuthScreen, setPreAuthScreen] = useState('login') // login | signup | check-email | forgot-password
   const [pendingEmail, setPendingEmail] = useState('')
   const [postAuthScreen, setPostAuthScreen] = useState('role-choice') // role-choice | plan-selection | owner-onboarding | employee-join
   const [selectedPlan, setSelectedPlan] = useState('starter')
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   function loadSession() {
     setSessionError('')
@@ -43,10 +46,19 @@ export default function App() {
 
   useEffect(() => {
     loadSession()
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession)
-      setPostAuthScreen('role-choice')
-      setSelectedPlan('starter')
+      // Only reset the post-auth wizard on a genuine new sign-in - this
+      // fires on every event, including a silent background
+      // TOKEN_REFRESHED (Supabase access tokens are short-lived, ~1hr),
+      // which would otherwise wipe out a partway-through-onboarding
+      // owner's progress and bounce them back to "role choice" for no
+      // visible reason.
+      if (event === 'SIGNED_IN') {
+        setPostAuthScreen('role-choice')
+        setSelectedPlan('starter')
+      }
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       if (!newSession) setPreAuthScreen('login')
     })
     return () => listener.subscription.unsubscribe()
@@ -88,6 +100,14 @@ export default function App() {
     )
   }
 
+  // Takes over the whole screen the moment a recovery-link click fires
+  // PASSWORD_RECOVERY, ahead of the normal session/profile flow below -
+  // that flow would otherwise start loading this user's profile using the
+  // recovery session before they've actually set a new password.
+  if (passwordRecovery) {
+    return <ResetPasswordScreen onDone={() => setPasswordRecovery(false)} />
+  }
+
   if (session === undefined || (session && profile === undefined && !profileError)) {
     return <LoadingScreen />
   }
@@ -115,7 +135,10 @@ export default function App() {
     if (preAuthScreen === 'check-email') {
       return <CheckEmailScreen email={pendingEmail} onBack={() => setPreAuthScreen('login')} />
     }
-    return <LoginScreen onSignup={() => setPreAuthScreen('signup')} />
+    if (preAuthScreen === 'forgot-password') {
+      return <ForgotPasswordScreen onBack={() => setPreAuthScreen('login')} />
+    }
+    return <LoginScreen onSignup={() => setPreAuthScreen('signup')} onForgotPassword={() => setPreAuthScreen('forgot-password')} />
   }
 
   if (!profile) {

@@ -8,7 +8,7 @@ import { supabase } from './supabaseClient'
 // for, so a freshly-added tier still renders something reasonable.
 const BLURBS = {
   starter: 'For a solo operator getting off the ground.',
-  growth: 'For a small crew that needs the AI receptionist and deposits.',
+  growth: 'For a small crew that needs PickUp and deposits.',
   pro: 'For a growing shop that wants it all.',
 }
 const DEFAULT_BLURB = 'Everything you need to run your business.'

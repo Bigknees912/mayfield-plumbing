@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sable — Software for trade businesses that answer the phone</title>
+<meta name="description" content="Sable answers every call, quotes the job, and books it before you've hung up. Built for plumbers, electricians, HVAC, and other trade businesses.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root {
+    --bg: #F5F4ED;
+    --card: #FFFFFF;
+    --ink: #1F1E1D;
+    --sub: #83807A;
+    --border: #E5E1D8;
+    --accent: #DA7756;
+    --accent-soft: #F3E3DB;
+    --success: #3D7A5C;
+    --success-soft: #E4EEE7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #262624;
+      --card: #302F2C;
+      --ink: #F0EEE8;
+      --sub: #A39E92;
+      --border: #3D3B37;
+      --accent: #E08D6B;
+      --accent-soft: #3A2E27;
+      --success: #6FAE8C;
+      --success-soft: #24332B;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', sans-serif; color: var(--ink); background: var(--bg); overflow-x: hidden; }
+  h1, h2, h3 { font-family: 'Oswald', sans-serif; font-weight: 600; letter-spacing: 0.2px; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  a { text-decoration: none; color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 84px 0; }
+
+  /* Motion - see comment above .reveal for the reduced-motion contract */
+  .intro-el { opacity: 0; transform: translateY(10px); animation: introIn 0.5s ease forwards; }
+  .intro-el.d1 { animation-delay: 0.05s; }
+  .intro-el.d2 { animation-delay: 0.14s; }
+  .intro-el.d3 { animation-delay: 0.22s; }
+  @keyframes introIn { to { opacity: 1; transform: translateY(0); } }
+
+  .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.55s ease, transform 0.55s ease; }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+
+  .word { display: inline-block; opacity: 0; transform: translateY(0.4em); transition: opacity 0.45s ease, transform 0.45s ease; }
+  .word.in { opacity: 1; transform: translateY(0); }
+
+  /* prefers-reduced-motion: no transforms/transitions run at all, not just
+     visually skipped - every animated element is pinned to its resting
+     state and the properties that would animate are removed outright. */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .intro-el, .reveal, .word, .hero-bg { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+  }
+
+  /* Nav */
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; padding: 18px 0; background: transparent; transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease; border-bottom: 1px solid transparent; }
+  nav.scrolled { background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.04); border-bottom-color: var(--border); }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-family: 'Oswald', sans-serif; color: var(--ink); font-size: 19px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .nav-links { display: flex; align-items: center; gap: 26px; }
+  .nav-links a { color: var(--sub); font-size: 13.5px; font-weight: 500; }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-cta { background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 8px; }
+  .nav-cta:hover { opacity: 0.88; }
+  @media (max-width: 720px) { .nav-links a:not(.nav-cta) { display: none; } }
+
+  /* Hero */
+  .hero { position: relative; padding: 148px 0 90px; overflow: hidden; }
+  .hero-bg { position: absolute; inset: -10% -5% auto -5%; height: 130%; background: radial-gradient(ellipse at top left, var(--accent-soft) 0%, transparent 55%); z-index: 0; will-change: transform; }
+  .hero-content { position: relative; z-index: 2; max-width: 720px; }
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 18px; text-transform: uppercase; }
+  .hero h1 { font-size: 48px; line-height: 1.12; margin-bottom: 22px; color: var(--ink); }
+  @media (max-width: 640px) { .hero h1 { font-size: 32px; } }
+  .hero p.sub { font-size: 17px; color: var(--sub); line-height: 1.6; margin-bottom: 30px; max-width: 560px; }
+  .hero p.sub em { color: var(--ink); font-style: normal; font-weight: 600; }
+  .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 40px; }
+  .btn-primary { background: var(--accent); color: #fff; font-size: 14.5px; font-weight: 600; padding: 14px 24px; border-radius: 10px; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-secondary { background: var(--card); color: var(--ink); font-size: 14.5px; font-weight: 600; padding: 14px 24px; border-radius: 10px; border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--sub); }
+
+  .fact-strip { display: flex; gap: 32px; flex-wrap: wrap; }
+  .fact { display: flex; flex-direction: column; gap: 3px; }
+  .fact .num { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 20px; color: var(--ink); }
+  .fact .label { font-size: 12.5px; color: var(--sub); }
+
+  /* Preview card */
+  .preview-wrap { position: relative; z-index: 2; margin-top: 56px; }
+  .preview-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 24px 60px rgba(31,30,29,0.10); max-width: 760px; }
+  .preview-card .bar { display: flex; gap: 6px; margin-bottom: 14px; }
+  .preview-card .bar span { width: 9px; height: 9px; border-radius: 50%; background: var(--border); }
+  .preview-row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; background: var(--bg); margin-bottom: 8px; }
+  .preview-row:last-child { margin-bottom: 0; }
+  .preview-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .preview-text { flex: 1; font-size: 13px; color: var(--ink); font-weight: 500; }
+  .preview-badge { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+
+  /* Sections */
+  .section-head { max-width: 560px; margin-bottom: 44px; }
+  .section-eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 1.5px; color: var(--accent); text-transform: uppercase; margin-bottom: 12px; }
+  .section-head h2 { font-size: 30px; color: var(--ink); line-height: 1.2; }
+  .section-head p { color: var(--sub); font-size: 15px; margin-top: 14px; line-height: 1.6; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+  .step { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .step .step-num { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--accent); margin-bottom: 12px; }
+  .step h3 { font-size: 17px; margin-bottom: 8px; color: var(--ink); }
+  .step p { font-size: 13.5px; color: var(--sub); line-height: 1.55; }
+
+  .cta-band { background: var(--ink); color: var(--bg); border-radius: 20px; padding: 56px 44px; text-align: center; }
+  .cta-band h2 { color: var(--bg); font-size: 28px; margin-bottom: 14px; }
+  .cta-band p { color: rgba(245,244,237,0.72); font-size: 15px; margin-bottom: 26px; }
+
+  footer { border-top: 1px solid var(--border); padding: 36px 0; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--sub); }
+  footer a { color: var(--sub); }
+  footer a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="wrap">
+    <div class="logo intro-el d1"><span class="dot"></span> Sable</div>
+    <div class="nav-links intro-el d2">
+      <a href="about.html">About</a>
+      <a href="home.html#how">How It Works</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="index.html">Log In</a>
+      <a href="pricing.html" class="nav-cta">Start Free Trial</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-bg" id="heroBg"></div>
+  <div class="wrap">
+    <div class="hero-content">
+      <div class="eyebrow intro-el d1">Software for plumbers, electricians, HVAC &amp; other trade businesses</div>
+      <!-- Not an .intro-el itself - the word-by-word script below handles
+           this element's reveal directly (each .word span fades/slides in
+           on its own stagger), so the container stays visible from the
+           start rather than double-animating on top of its own words. -->
+      <h1 id="heroHeadline"><!-- words injected by script for the reveal --></h1>
+      <p class="sub intro-el d3">
+        If you miss five calls this week, that's five jobs someone else just booked. <em>Sable answers every call,
+        quotes the job, and puts it on your calendar</em> — even while you're elbow-deep in a water heater.
+      </p>
+      <div class="hero-ctas intro-el d3">
+        <a href="pricing.html" class="btn-primary">Start your 7-day free trial</a>
+        <a href="about.html" class="btn-secondary">Read our story</a>
+      </div>
+      <div class="fact-strip intro-el d3">
+        <div class="fact"><span class="num">1 call</span><span class="label">Setup takes one phone call</span></div>
+        <div class="fact"><span class="num">48 hrs</span><span class="label">Most shops are live within two days</span></div>
+        <div class="fact"><span class="num">7 days</span><span class="label">Free trial, cancel anytime</span></div>
+      </div>
+    </div>
+
+    <div class="preview-wrap reveal">
+      <div class="preview-card">
+        <div class="bar"><span></span><span></span><span></span></div>
+        <div class="preview-row">
+          <div class="preview-dot" style="background:#5B7A8C;"></div>
+          <div class="preview-text">Incoming call — Marcus R., 4:52 PM</div>
+          <div class="preview-badge" style="background:#E4EBEE; color:#5B7A8C;">Answered by Sable</div>
+        </div>
+        <div class="preview-row">
+          <div class="preview-dot" style="background:#DA7756;"></div>
+          <div class="preview-text">Quoted: Drain cleaning, $260–$310</div>
+          <div class="preview-badge" style="background:#F3E3DB; color:#DA7756;">Quoted</div>
+        </div>
+        <div class="preview-row">
+          <div class="preview-dot" style="background:#3D7A5C;"></div>
+          <div class="preview-text">Booked: Tomorrow, 9:00–11:00 AM</div>
+          <div class="preview-badge" style="background:#E4EEE7; color:#3D7A5C;">On the calendar</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-eyebrow">How It Works</div>
+      <h2>Three steps. No hold music.</h2>
+      <p>Nothing about running your business changes — Sable just makes sure the phone never wins.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">01</div>
+        <h3>The phone rings</h3>
+        <p>Any time, any call. Sable picks up and has a real conversation about what's wrong.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">02</div>
+        <h3>It quotes the job</h3>
+        <p>Using your own pricing and service catalog — not a generic guess.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">03</div>
+        <h3>It's on your calendar</h3>
+        <p>Booked, assigned, and visible on your dashboard before you've even seen a missed-call notification.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="cta-band reveal">
+      <h2>See it before you sign up for it.</h2>
+      <p>No commitment, no credit card just to look around.</p>
+      <a href="about.html" class="btn-primary">Read our story</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>© <span id="year"></span> Sable</div>
+    <div>
+      <a href="about.html" style="margin-right:14px;">About</a>
+      <a href="pricing.html" style="margin-right:14px;">Pricing</a>
+      <a href="terms.html" style="margin-right:14px;">Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Nav background on scroll
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 40) nav.classList.add('scrolled');
+    else nav.classList.remove('scrolled');
+  }, { passive: true });
+
+  // Headline: word-by-word reveal on load (skipped entirely under
+  // reduced-motion - the words are just written in statically instead).
+  const headline = document.getElementById('heroHeadline');
+  const headlineText = "Whoever answers the phone gets the job.";
+  if (reduceMotion) {
+    headline.textContent = headlineText;
+  } else {
+    headline.innerHTML = headlineText.split(' ').map((w, i) =>
+      `<span class="word" style="transition-delay:${0.25 + i * 0.055}s">${w}</span>`
+    ).join(' ');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        headline.querySelectorAll('.word').forEach((w) => w.classList.add('in'));
+      });
+    });
+  }
+
+  // Subtle parallax on the hero background - moves slower than scroll,
+  // skipped under reduced-motion.
+  const heroBg = document.getElementById('heroBg');
+  if (!reduceMotion) {
+    window.addEventListener('scroll', () => {
+      const y = window.scrollY;
+      heroBg.style.transform = `translateY(${y * 0.15}px)`;
+    }, { passive: true });
+  }
+
+  // Scroll reveal - fires once per element, first time it enters view.
+  if (!reduceMotion) {
+    const revealEls = document.querySelectorAll('.reveal');
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    revealEls.forEach((el) => io.observe(el));
+  } else {
+    document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in'));
+  }
+</script>
+
+</body>
+</html>

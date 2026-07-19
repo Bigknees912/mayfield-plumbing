@@ -6,6 +6,7 @@ import { AuthShell, LIGHT } from '../auth/ui'
 import { ErrorState, LoadingState } from '../dashboard/ui'
 import AdminLoginScreen from './AdminLoginScreen'
 import AdminShell from './AdminShell'
+import ResetPasswordScreen from '../auth/ResetPasswordScreen'
 
 // Entirely separate auth/state machine from App.jsx - reachable only at
 // the /admin path (see main.jsx) and never linked to from anywhere inside
@@ -19,6 +20,7 @@ export default function SuperAdminApp() {
   const [sessionError, setSessionError] = useState('')
   const [isAdmin, setIsAdmin] = useState(undefined)
   const [adminCheckError, setAdminCheckError] = useState('')
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   function loadSession() {
     setSessionError('')
@@ -29,8 +31,9 @@ export default function SuperAdminApp() {
 
   useEffect(() => {
     loadSession()
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession)
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
     })
     return () => listener.subscription.unsubscribe()
   }, [])
@@ -60,6 +63,10 @@ export default function SuperAdminApp() {
         <ErrorState message={`Couldn't check your session: ${sessionError}`} onRetry={loadSession} />
       </AuthShell>
     )
+  }
+
+  if (passwordRecovery) {
+    return <ResetPasswordScreen onDone={() => setPasswordRecovery(false)} />
   }
 
   if (session === undefined || (session && isAdmin === undefined && !adminCheckError)) {
