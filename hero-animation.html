@@ -8,27 +8,51 @@
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
   :root {
-    --navy: #0A1128;
-    --copper: #B87333;
-    --copper-soft: #B8733322;
+    --bg: #F5F4ED;
     --ink: #1F1E1D;
     --sub: #6B7280;
     --border: #E7E5E1;
+    --accent: #DA7756;
+    --accent-soft: #F3E3DB;
+    --gold: #E0A94E;
     --green: #1E9E5A;
     --green-soft: #E5F5EC;
+    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #262624;
+      --ink: #F0EEE8;
+      --sub: #A39E92;
+      --border: #3D3B37;
+      --accent: #E08D6B;
+      --accent-soft: #3A2E27;
+      --gold: #C99544;
+    }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: var(--navy);
+    background: var(--bg);
     color: var(--ink);
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 48px 20px;
+    position: relative;
+    overflow: hidden;
   }
+
+  .bg-blobs { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(80px); will-change: transform; }
+  .blob.b1 { width: 480px; height: 480px; top: -120px; left: -140px; background: radial-gradient(circle, var(--accent) 0%, transparent 72%); opacity: 0.4; animation: floatBlob1 24s var(--ease-smooth) infinite; }
+  .blob.b2 { width: 400px; height: 400px; bottom: -160px; right: -120px; background: radial-gradient(circle, var(--gold) 0%, transparent 72%); opacity: 0.32; animation: floatBlob2 28s var(--ease-smooth) infinite; }
+  @keyframes floatBlob1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(50px, 40px) scale(1.08); } }
+  @keyframes floatBlob2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-40px, -30px) scale(0.94); } }
+
+  .panel { position: relative; z-index: 2; }
 
   @media (prefers-reduced-motion: reduce) {
     * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -41,7 +65,7 @@
     background: #fff;
     border-radius: 20px;
     border: 1px solid #ECEAE5;
-    box-shadow: 0 24px 60px -20px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.08);
+    box-shadow: 0 24px 60px -24px rgba(31,30,29,0.22), 0 4px 16px rgba(31,30,29,0.06);
     padding: 22px 22px 26px;
     overflow: hidden;
   }
@@ -56,7 +80,7 @@
     width: 38px;
     height: 38px;
     border-radius: 10px;
-    background: var(--navy);
+    background: var(--ink);
     color: #fff;
     font-weight: 800;
     font-size: 17px;
@@ -91,10 +115,10 @@
     left: 18px; top: 15px;
     height: 2px;
     width: 0%;
-    background: var(--copper);
+    background: var(--accent);
     border-radius: 2px;
     z-index: 1;
-    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.6s var(--ease-smooth);
   }
   .node {
     position: relative;
@@ -114,14 +138,14 @@
   }
   .node svg { width: 14px; height: 14px; display: block; }
   .node.is-done {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
   }
   .node.is-active {
     background: #fff;
-    border-color: var(--copper);
-    color: var(--copper);
+    border-color: var(--accent);
+    color: var(--accent);
     transform: scale(1.08);
   }
   .node.is-active::after {
@@ -129,7 +153,7 @@
     position: absolute;
     inset: -6px;
     border-radius: 50%;
-    border: 2px solid var(--copper);
+    border: 2px solid var(--accent);
     opacity: 0.55;
     animation: pulseRing 1.6s ease-out infinite;
   }
@@ -148,7 +172,7 @@
   .cards-track {
     display: flex;
     gap: 12px;
-    transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.55s var(--ease-smooth);
   }
   .step-card {
     flex: 0 0 calc(50% - 6px);
@@ -239,7 +263,7 @@
     display: flex; align-items: center; gap: 6px;
     font-size: 10.5px; color: var(--sub); font-weight: 600;
   }
-  .ai-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--copper); animation: blink 1s ease-in-out infinite; }
+  .ai-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
 
   /* ---- Step 2: chat thread ---- */
   .pill-tag {
@@ -275,7 +299,7 @@
   /* ---- Step 3: lead card ---- */
   .lead-tag {
     display: inline-block;
-    background: var(--copper); color: #fff;
+    background: var(--accent); color: #fff;
     font-size: 9.5px; font-weight: 700; letter-spacing: 0.5px;
     border-radius: 5px; padding: 3px 7px;
     margin-bottom: 10px;
@@ -299,8 +323,8 @@
     transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease, transform 0.3s ease;
   }
   .slot.is-booked {
-    background: var(--copper);
-    border-color: var(--copper);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
     transform: scale(1.04);
   }
@@ -369,7 +393,7 @@
     transition: fill 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     transform: scale(0.7);
   }
-  .stars svg.lit { fill: var(--copper); transform: scale(1); }
+  .stars svg.lit { fill: var(--accent); transform: scale(1); }
 
   @media (max-width: 420px) {
     .panel { padding: 18px 16px 20px; }
@@ -380,6 +404,11 @@
 </style>
 </head>
 <body>
+
+  <div class="bg-blobs">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+  </div>
 
   <div class="panel">
     <div class="panel-header">

@@ -19,6 +19,8 @@
     --accent-soft: #F3E3DB;
     --success: #3D7A5C;
     --success-soft: #E4EEE7;
+    --gold: #E0A94E;
+    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -31,6 +33,7 @@
       --accent-soft: #3A2E27;
       --success: #6FAE8C;
       --success-soft: #24332B;
+      --gold: #C99544;
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -49,10 +52,10 @@
   .intro-el.d3 { animation-delay: 0.22s; }
   @keyframes introIn { to { opacity: 1; transform: translateY(0); } }
 
-  .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.55s ease, transform 0.55s ease; }
+  .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.7s var(--ease-smooth), transform 0.7s var(--ease-smooth); }
   .reveal.in { opacity: 1; transform: translateY(0); }
 
-  .word { display: inline-block; opacity: 0; transform: translateY(0.4em); transition: opacity 0.45s ease, transform 0.45s ease; }
+  .word { display: inline-block; opacity: 0; transform: translateY(0.4em); transition: opacity 0.55s var(--ease-smooth), transform 0.55s var(--ease-smooth); }
   .word.in { opacity: 1; transform: translateY(0); }
 
   /* prefers-reduced-motion: no transforms/transitions run at all, not just
@@ -60,25 +63,30 @@
      state and the properties that would animate are removed outright. */
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .intro-el, .reveal, .word, .hero-bg { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+    .intro-el, .reveal, .word, .hero-bg, .blob { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
   }
 
   /* Nav */
-  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; padding: 18px 0; background: transparent; transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease; border-bottom: 1px solid transparent; }
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; padding: 18px 0; background: transparent; transition: background 0.4s var(--ease-smooth), box-shadow 0.4s var(--ease-smooth), border-color 0.4s var(--ease-smooth); border-bottom: 1px solid transparent; }
   nav.scrolled { background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.04); border-bottom-color: var(--border); }
   nav .wrap { display: flex; align-items: center; justify-content: space-between; }
   .logo { font-family: 'Oswald', sans-serif; color: var(--ink); font-size: 19px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
   .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   .nav-links { display: flex; align-items: center; gap: 26px; }
-  .nav-links a { color: var(--sub); font-size: 13.5px; font-weight: 500; }
+  .nav-links a { color: var(--sub); font-size: 13.5px; font-weight: 500; transition: color 0.3s var(--ease-smooth); }
   .nav-links a:hover { color: var(--ink); }
-  .nav-cta { background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 8px; }
-  .nav-cta:hover { opacity: 0.88; }
+  .nav-cta { background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 8px; transition: opacity 0.3s var(--ease-smooth), transform 0.3s var(--ease-smooth); }
+  .nav-cta:hover { opacity: 0.88; transform: translateY(-1px); }
   @media (max-width: 720px) { .nav-links a:not(.nav-cta) { display: none; } }
 
   /* Hero */
   .hero { position: relative; padding: 148px 0 90px; overflow: hidden; }
-  .hero-bg { position: absolute; inset: -10% -5% auto -5%; height: 130%; background: radial-gradient(ellipse at top left, var(--accent-soft) 0%, transparent 55%); z-index: 0; will-change: transform; }
+  .hero-bg { position: absolute; inset: -10% -5% auto -5%; height: 130%; z-index: 0; will-change: transform; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(70px); will-change: transform; }
+  .blob.b1 { width: 460px; height: 460px; top: -140px; left: -100px; background: radial-gradient(circle, var(--accent) 0%, transparent 72%); opacity: 0.4; animation: floatBlob1 24s var(--ease-smooth) infinite; }
+  .blob.b2 { width: 380px; height: 380px; top: 10px; right: -120px; background: radial-gradient(circle, var(--gold) 0%, transparent 72%); opacity: 0.32; animation: floatBlob2 28s var(--ease-smooth) infinite; }
+  @keyframes floatBlob1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(50px, 35px) scale(1.08); } }
+  @keyframes floatBlob2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-40px, 45px) scale(0.94); } }
   .hero-content { position: relative; z-index: 2; max-width: 720px; }
   .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 18px; text-transform: uppercase; }
   .hero h1 { font-size: 48px; line-height: 1.12; margin-bottom: 22px; color: var(--ink); }
@@ -86,10 +94,10 @@
   .hero p.sub { font-size: 17px; color: var(--sub); line-height: 1.6; margin-bottom: 30px; max-width: 560px; }
   .hero p.sub em { color: var(--ink); font-style: normal; font-weight: 600; }
   .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 40px; }
-  .btn-primary { background: var(--accent); color: #fff; font-size: 14.5px; font-weight: 600; padding: 14px 24px; border-radius: 10px; }
-  .btn-primary:hover { opacity: 0.9; }
-  .btn-secondary { background: var(--card); color: var(--ink); font-size: 14.5px; font-weight: 600; padding: 14px 24px; border-radius: 10px; border: 1px solid var(--border); }
-  .btn-secondary:hover { border-color: var(--sub); }
+  .btn-primary { background: var(--accent); color: #fff; font-size: 14.5px; font-weight: 600; padding: 14px 24px; border-radius: 10px; transition: opacity 0.3s var(--ease-smooth), transform 0.3s var(--ease-smooth); }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-secondary { background: var(--card); color: var(--ink); font-size: 14.5px; font-weight: 600; padding: 14px 24px; border-radius: 10px; border: 1px solid var(--border); transition: border-color 0.3s var(--ease-smooth), transform 0.3s var(--ease-smooth); }
+  .btn-secondary:hover { border-color: var(--sub); transform: translateY(-1px); }
 
   .fact-strip { display: flex; gap: 32px; flex-wrap: wrap; }
   .fact { display: flex; flex-direction: column; gap: 3px; }
@@ -146,7 +154,10 @@
 </nav>
 
 <section class="hero">
-  <div class="hero-bg" id="heroBg"></div>
+  <div class="hero-bg" id="heroBg">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+  </div>
   <div class="wrap">
     <div class="hero-content">
       <div class="eyebrow intro-el d1">Software for plumbers, electricians, HVAC &amp; other trade businesses</div>
