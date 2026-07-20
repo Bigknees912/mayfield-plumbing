@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data: https://images.unsplash.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
 <title>Pricing — Sable</title>
 <meta name="description" content="Sable pricing by fleet size: Solo, Team, and Fleet. 7-day free trial, no long-term contract, no hidden fees.">
 <style>
@@ -53,8 +53,18 @@
   .reveal.in { opacity: 1; transform: translateY(0); }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .intro-el, .reveal, .blob { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+    .intro-el, .reveal, .blob, .scroll-img { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+    .scroll-img.is-link:hover img { transform: none !important; }
   }
+
+  /* Scroll/hover image reveal - see the IntersectionObserver script near
+     the bottom of the page. */
+  .scroll-img { display: block; opacity: 0; transform: translateY(28px); transition: opacity 0.36s var(--ease-smooth), transform 0.36s var(--ease-smooth); border-radius: 20px; overflow: hidden; }
+  .scroll-img.in { opacity: 1; transform: translateY(0); }
+  .scroll-img img { display: block; width: 100%; height: auto; transition: transform 0.3s var(--ease-smooth); }
+  .scroll-img.is-link { cursor: pointer; }
+  .scroll-img.is-link:hover img { transform: scale(1.04); }
+  .scroll-img-caption { margin-top: 12px; font-size: 13px; color: var(--sub); }
 
   nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; padding: 18px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
   nav .wrap { display: flex; align-items: center; justify-content: space-between; }
@@ -197,6 +207,20 @@
 
 <section>
   <div class="wrap">
+    <a class="scroll-img is-link" href="home.html" aria-label="See how Sable works">
+      <img
+        src="https://images.unsplash.com/photo-Orq90-onlTA?auto=format&fit=crop&w=1600&q=80"
+        alt="An electrician working on wiring"
+        loading="lazy"
+        onerror="this.closest('.scroll-img').style.display='none'"
+      >
+    </a>
+    <div class="scroll-img-caption">One dispatch app, priced by fleet size — not by trade.</div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
     <div class="trust-section reveal">
       <div class="trust-head">
         <h2>You're not locked in.</h2>
@@ -265,6 +289,23 @@
   } else {
     document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in'));
   }
+
+  // Scroll-in image reveal - own scope so its observer doesn't collide
+  // with the .reveal one above.
+  (() => {
+    const scrollImgs = document.querySelectorAll('.scroll-img');
+    if (reduceMotion) {
+      scrollImgs.forEach((el) => el.classList.add('in'));
+      return;
+    }
+    const imgIo = new IntersectionObserver((entries) => {
+      entries.filter((e) => e.isIntersecting).forEach((entry, i) => {
+        imgIo.unobserve(entry.target);
+        setTimeout(() => entry.target.classList.add('in'), i * 90);
+      });
+    }, { threshold: 0.2, rootMargin: '0px 0px -40px 0px' });
+    scrollImgs.forEach((el) => imgIo.observe(el));
+  })();
 </script>
 
 </body>
