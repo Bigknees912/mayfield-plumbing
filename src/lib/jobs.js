@@ -7,11 +7,16 @@ import { recordSmsConsent } from './smsConsent'
 
 const JOB_SELECT = '*, customers(*), job_types(*), assigned_tech:profiles!jobs_assigned_tech_id_fkey(*)'
 
-export async function listJobs() {
-  const { data, error } = await supabase
+// locationId narrows to one branch (migration 056's multi-location
+// support) - omit it (or pass null/'all') for the owner's combined view
+// across every location.
+export async function listJobs({ locationId } = {}) {
+  let query = supabase
     .from('jobs')
     .select(JOB_SELECT)
     .order('created_at', { ascending: false })
+  if (locationId) query = query.eq('location_id', locationId)
+  const { data, error } = await query
   if (error) throw error
   return data
 }
@@ -27,13 +32,14 @@ export async function listRecentJobs(limit = 6) {
 }
 
 // [start, end) - end is exclusive, matches calendar month-grid usage.
-export async function listJobsInRange(startDate, endDate, { techId } = {}) {
+export async function listJobsInRange(startDate, endDate, { techId, locationId } = {}) {
   let query = supabase
     .from('jobs')
     .select(JOB_SELECT)
     .gte('scheduled_date', startDate)
     .lt('scheduled_date', endDate)
   if (techId) query = query.eq('assigned_tech_id', techId)
+  if (locationId) query = query.eq('location_id', locationId)
   const { data, error } = await query.order('scheduled_date', { ascending: true })
   if (error) throw error
   return data
@@ -89,12 +95,13 @@ export async function getLastVisit(customerId, excludeJobId) {
   return data
 }
 
-export async function listTeamTechs() {
-  const { data, error } = await supabase
+export async function listTeamTechs({ locationId } = {}) {
+  let query = supabase
     .from('profiles')
     .select('*')
     .eq('role', 'tech')
-    .order('name', { ascending: true })
+  if (locationId) query = query.eq('location_id', locationId)
+  const { data, error } = await query.order('name', { ascending: true })
   if (error) throw error
   return data
 }
@@ -102,6 +109,16 @@ export async function listTeamTechs() {
 // Keyed by tech_id. lat/lng live on tech_locations, not profiles - there's
 // no GPS pipeline populating this yet, so it'll be an empty map in
 // practice until a mobile app starts upserting positions.
+export async function listOfficeAdmins() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'office_admin')
+    .order('name', { ascending: true })
+  if (error) throw error
+  return data
+}
+
 export async function listTechLocationsById() {
   const { data, error } = await supabase.from('tech_locations').select('*')
   if (error) throw error

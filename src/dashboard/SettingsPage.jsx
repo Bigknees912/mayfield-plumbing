@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Trash2, Plus } from 'lucide-react'
 import { updateCompanySettings } from '../lib/settings'
+import { getMyPlan } from '../lib/plans'
+import { listLocations, createLocation, deleteLocation } from '../lib/locations'
 import { LIGHT } from '../theme'
-import { SectionLabel } from './ui'
+import { SectionLabel, EmptyState } from './ui'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, Checkbox, usePendingAction } from '../auth/ui'
 
 // Owner-only settings. Starts with just Pricing & Revenue - the numbers
@@ -14,7 +17,92 @@ export default function SettingsPage({ company, onSaved }) {
       <SectionLabel>Settings</SectionLabel>
       <PricingRevenueSection company={company} onSaved={onSaved} />
       <GoalsSection company={company} onSaved={onSaved} />
+      <LocationsSection />
     </>
+  )
+}
+
+// Fleet-tier ('pro' plan) only - migration 056. Hidden entirely on
+// Starter/Growth rather than shown-and-disabled, since a company on a
+// lower tier has no locations table entries to manage yet anyway.
+function LocationsSection() {
+  const [allowed, setAllowed] = useState(false)
+  const [locations, setLocations] = useState(undefined)
+  const [name, setName] = useState('')
+  const [address, setAddress] = useState('')
+  const { loading, error, run, setError } = usePendingAction()
+
+  function load() {
+    listLocations().then(setLocations).catch((err) => setError(err.message || String(err)))
+  }
+  useEffect(() => {
+    getMyPlan().then((plan) => {
+      setAllowed(plan === 'pro')
+      if (plan === 'pro') load()
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (!allowed) return null
+
+  function add() {
+    if (!name.trim()) return setError('Enter a location name.')
+    run(async () => {
+      await createLocation({ name: name.trim(), address: address.trim() })
+      setName('')
+      setAddress('')
+      load()
+    })
+  }
+
+  async function remove(id) {
+    setError('')
+    try {
+      await deleteLocation(id)
+      load()
+    } catch (err) {
+      setError(err.message || String(err))
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <SectionLabel>Locations</SectionLabel>
+      <div style={{ fontSize: 12, color: LIGHT.sub, marginBottom: 12, lineHeight: 1.4 }}>
+        Each location gets its own jobs, calendar, and team - assign a tech or office
+        admin to one from the Team tab. Leave someone unassigned and they see every job
+        company-wide, same as before this feature existed.
+      </div>
+      <div style={{ background: LIGHT.card, borderRadius: 16, padding: 16, marginBottom: 12 }}>
+        {locations === undefined && <div style={{ fontSize: 12, color: LIGHT.sub }}>Loading…</div>}
+        {locations && locations.length === 0 && <EmptyState>No locations yet - add your first one below.</EmptyState>}
+        {locations && locations.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: locations.length ? 4 : 0 }}>
+            {locations.map((loc) => (
+              <div key={loc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: LIGHT.ink }}>{loc.name}</div>
+                  {loc.address && <div style={{ fontSize: 11.5, color: LIGHT.sub }}>{loc.address}</div>}
+                </div>
+                <button className="tap" onClick={() => remove(loc.id)} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 15, background: LIGHT.alertSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Trash2 size={13} color={LIGHT.alert} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ background: LIGHT.card, borderRadius: 16, padding: 16 }}>
+        <FieldLabel>Location name</FieldLabel>
+        <TextInput value={name} onChange={setName} placeholder="Downtown Shop" />
+        <FieldLabel>Address (optional)</FieldLabel>
+        <TextInput value={address} onChange={setAddress} placeholder="123 Main St" />
+        <ErrorText>{error}</ErrorText>
+        <PrimaryButton onClick={add} disabled={loading}>
+          <Plus size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> {loading ? 'Adding…' : 'Add Location'}
+        </PrimaryButton>
+      </div>
+    </div>
   )
 }
 

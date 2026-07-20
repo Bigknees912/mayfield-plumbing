@@ -981,6 +981,7 @@ export type Database = {
           job_type_id: string | null
           lat: number | null
           lng: number | null
+          location_id: string | null
           notes: string | null
           price_high: number | null
           price_low: number | null
@@ -1007,6 +1008,7 @@ export type Database = {
           job_type_id?: string | null
           lat?: number | null
           lng?: number | null
+          location_id?: string | null
           notes?: string | null
           price_high?: number | null
           price_low?: number | null
@@ -1033,6 +1035,7 @@ export type Database = {
           job_type_id?: string | null
           lat?: number | null
           lng?: number | null
+          location_id?: string | null
           notes?: string | null
           price_high?: number | null
           price_low?: number | null
@@ -1077,6 +1080,13 @@ export type Database = {
             columns: ["job_type_id"]
             isOneToOne: false
             referencedRelation: "job_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
         ]
@@ -1141,6 +1151,38 @@ export type Database = {
             columns: ["converted_job_id"]
             isOneToOne: false
             referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      locations: {
+        Row: {
+          address: string | null
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          address?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          address?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -1329,6 +1371,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          location_id: string | null
           name: string
           phone: string | null
           role: string
@@ -1339,6 +1382,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id: string
+          location_id?: string | null
           name: string
           phone?: string | null
           role: string
@@ -1349,6 +1393,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          location_id?: string | null
           name?: string
           phone?: string | null
           role?: string
@@ -1360,6 +1405,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
         ]
@@ -1753,6 +1805,12 @@ export type Database = {
           target_id: string | null
           target_type: string | null
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_audit_log"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       admin_list_companies: {
         Args: never
@@ -1792,6 +1850,7 @@ export type Database = {
           p_key: string
           p_monthly_price: number
           p_name: string
+          p_seat_limit?: number
         }
         Returns: {
           active: boolean
@@ -1801,12 +1860,23 @@ export type Database = {
           key: string
           monthly_price: number
           name: string
+          seat_limit: number | null
           stripe_price_id: string | null
           updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "plans"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       anonymize_customer_pii: {
         Args: { p_customer_id: string; p_note?: string }
+        Returns: undefined
+      }
+      assign_profile_location: {
+        Args: { p_location_id: string; p_profile_id: string }
         Returns: undefined
       }
       create_company_and_owner: {
@@ -1846,13 +1916,20 @@ export type Database = {
           timezone: string
           trade: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "companies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       current_company_id: { Args: never; Returns: string }
+      current_location_id: { Args: never; Returns: string }
       current_role: { Args: never; Returns: string }
       flag_stale_estimates: { Args: never; Returns: undefined }
       is_super_admin: { Args: never; Returns: boolean }
       join_company: {
-        Args: { p_join_code: string; p_name: string }
+        Args: { p_join_code: string; p_name: string; p_role?: string }
         Returns: {
           auto_assign_by_zone: boolean
           base_fee: number
@@ -1880,6 +1957,12 @@ export type Database = {
           timezone: string
           trade: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "companies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       log_admin_action: {
         Args: {
@@ -1904,6 +1987,12 @@ export type Database = {
           price: number | null
           reminder_lead_days: number
           status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "service_contracts"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       record_sms_consent: {

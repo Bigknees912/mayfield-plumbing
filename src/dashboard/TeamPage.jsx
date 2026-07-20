@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { Package, Trophy } from 'lucide-react'
 import { LIGHT } from '../theme'
 import { SectionLabel, ErrorState, LoadingState, EmptyState, initialsOf, money } from './ui'
-import { listTeamTechs } from '../lib/jobs'
+import { listTeamTechs, listOfficeAdmins } from '../lib/jobs'
 import { listParts, listTechPartStockMap, setTechPartStock } from '../lib/inventory'
 import { listTechLeaderboardForMonth, formatDuration } from '../lib/analytics'
+import { assignProfileLocation } from '../lib/locations'
 
 // Owner-only (matches every other AppShell tab besides Home/Calendar).
 // Each tech's card expands into their rough parts stock list - RLS
@@ -13,8 +14,9 @@ import { listTechLeaderboardForMonth, formatDuration } from '../lib/analytics'
 // Calendar), so for now this owner view is the only place stock gets
 // edited. The Jobs board's assign picker reads the same tech_part_stock
 // table to flag (never block) an assignment.
-export default function TeamPage() {
+export default function TeamPage({ locations = [] }) {
   const [techs, setTechs] = useState(undefined)
+  const [officeAdmins, setOfficeAdmins] = useState([])
   const [parts, setParts] = useState([])
   const [stockMap, setStockMap] = useState({})
   const [leaderboard, setLeaderboard] = useState([])
@@ -24,9 +26,10 @@ export default function TeamPage() {
   function load() {
     setError('')
     setTechs(undefined)
-    Promise.all([listTeamTechs(), listParts(), listTechPartStockMap(), listTechLeaderboardForMonth()])
-      .then(([t, p, stock, board]) => {
+    Promise.all([listTeamTechs(), listOfficeAdmins(), listParts(), listTechPartStockMap(), listTechLeaderboardForMonth()])
+      .then(([t, oa, p, stock, board]) => {
         setTechs(t)
+        setOfficeAdmins(oa)
         setParts(p)
         setStockMap(stock)
         setLeaderboard(board)
@@ -34,6 +37,33 @@ export default function TeamPage() {
       .catch((err) => setError(err.message || String(err)))
   }
   useEffect(load, [])
+
+  // Owner-only RPC (migration 056) - '' in the <select> means "all
+  // locations", which the RPC takes as null.
+  async function changeLocation(profileId, locationId, setList) {
+    setList((list) => list.map((p) => (p.id === profileId ? { ...p, location_id: locationId } : p)))
+    try {
+      await assignProfileLocation(profileId, locationId)
+    } catch (err) {
+      load()
+      setError(err.message || String(err))
+    }
+  }
+
+  function LocationPicker({ member, setList }) {
+    if (locations.length === 0) return null
+    return (
+      <select
+        value={member.location_id || ''}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => changeLocation(member.id, e.target.value || null, setList)}
+        style={{ fontSize: 11, fontWeight: 600, color: LIGHT.sub, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 8, padding: '4px 6px', flexShrink: 0 }}
+      >
+        <option value="">All Locations</option>
+        {locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+      </select>
+    )
+  }
 
   // Optimistic toggle, reverted on failure - same pattern as ClientsPage's
   // tag/consent edits.
@@ -83,6 +113,7 @@ export default function TeamPage() {
                       <Package size={11} /> {outCount} out
                     </span>
                   )}
+                  <LocationPicker member={t} setList={setTechs} />
                 </div>
 
                 {isOpen && (
@@ -113,6 +144,28 @@ export default function TeamPage() {
             )
           })}
         </div>
+      )}
+
+      {officeAdmins.length > 0 && (
+        <>
+          <div style={{ marginTop: 20 }}>
+            <SectionLabel>Office Admins</SectionLabel>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {officeAdmins.map((oa) => (
+              <div key={oa.id} style={{ background: LIGHT.card, borderRadius: 16, padding: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 17, background: LIGHT.infoSoft, color: LIGHT.info, fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {initialsOf(oa.name)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: LIGHT.ink }}>{oa.name}</div>
+                  <div style={{ fontSize: 11.5, color: LIGHT.sub }}>{oa.phone || oa.email || 'Office Admin'}</div>
+                </div>
+                <LocationPicker member={oa} setList={setOfficeAdmins} />
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

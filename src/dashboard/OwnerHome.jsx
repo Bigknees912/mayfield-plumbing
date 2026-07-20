@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { PhoneIncoming, CalendarCheck, TrendingUp, AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react'
+import { PhoneIncoming, CalendarCheck, TrendingUp, AlertTriangle, CheckCircle2, ShieldCheck, MapPin } from 'lucide-react'
 import { getDashboardStats, listOpenFeedback } from '../lib/dashboard'
 import { listRecentJobs } from '../lib/jobs'
+import { getLocationTotals } from '../lib/locations'
 import { LIGHT } from '../theme'
 import { StatCard, SectionLabel, Badge, LoadingState, ErrorState, ErrorBanner, EmptyState, money, STATUS_META, URGENCY_STYLE } from './ui'
 import { useJobsRealtime } from './useJobsRealtime'
@@ -11,15 +12,18 @@ import { useAsyncData } from './useAsyncData'
 // read a hardcoded Calgary forecast with no real data source. "Recovered"
 // stat (calls saved from voicemail) dropped for the same reason; replaced
 // with "Completed Today", which is a real, queryable number.
-export default function OwnerHome({ businessProfile }) {
-  const [data, setData] = useState({ stats: null, jobs: [], feedback: [] })
+export default function OwnerHome({ businessProfile, locations = [] }) {
+  const [data, setData] = useState({ stats: null, jobs: [], feedback: [], locationTotals: [] })
 
   async function load() {
-    const [stats, jobs, feedback] = await Promise.all([getDashboardStats(), listRecentJobs(6), listOpenFeedback()])
-    setData({ stats, jobs, feedback })
+    const [stats, jobs, feedback, locationTotals] = await Promise.all([
+      getDashboardStats(), listRecentJobs(6), listOpenFeedback(),
+      locations.length > 0 ? getLocationTotals() : Promise.resolve([]),
+    ])
+    setData({ stats, jobs, feedback, locationTotals })
   }
 
-  const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [])
+  const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [locations.length])
 
   // Picks up a job Alex books over the phone (or any other change) live,
   // without a manual refresh. A failed background refresh here shows a
@@ -30,11 +34,27 @@ export default function OwnerHome({ businessProfile }) {
   if (loading) return <LoadingState />
   if (error && !hasLoadedOnce) return <ErrorState message={error} onRetry={reload} />
 
-  const { stats, jobs, feedback } = data
+  const { stats, jobs, feedback, locationTotals } = data
 
   return (
     <>
       <ErrorBanner message={error} onRetry={reload} />
+
+      {locationTotals.length > 0 && (
+        <div style={{ background: LIGHT.card, borderRadius: 16, padding: 14, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: LIGHT.ink, marginBottom: 10 }}>
+            <MapPin size={13} color={LIGHT.accent} /> All Locations — Combined
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {locationTotals.map((loc) => (
+              <div key={loc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, color: LIGHT.ink }}>{loc.name}</span>
+                <span style={{ fontSize: 12, color: LIGHT.sub }}>{loc.openJobs} open · {money(loc.openValue)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: LIGHT.successSoft, color: LIGHT.success, borderRadius: 20, padding: '4px 10px', fontSize: 10.5, fontWeight: 700, marginBottom: 14 }}>
         <ShieldCheck size={12} /> Licensed &amp; Insured — Alberta
       </div>
