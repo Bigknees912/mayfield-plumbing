@@ -62,8 +62,22 @@ test("buildAssistantConfig: firstMessage and name reflect this company, not a ha
     jobTypes: [{ key: "furnace_repair", label: "Furnace Repair" }],
     webhookUrl: "https://example.com/vapi/webhook",
   });
-  assert.equal(config.name, "Reyes HVAC Services Receptionist");
+  // Default variant is 'a' - name gets tagged with it (useful once both
+  // variants are deployed as separate Vapi assistants for the A/B test)
+  // and firstMessage matches OPENING_LINES.a.
+  assert.equal(config.name, "Reyes HVAC Services Receptionist (variant a)");
   assert.equal(config.firstMessage, "Reyes HVAC Services, this is Alex. What's going on?");
+});
+
+test("buildAssistantConfig: variant 'b' gets a different opening line and is tagged in the name", () => {
+  const config = buildAssistantConfig({
+    company: { name: "Reyes HVAC Services", trade: "HVAC" },
+    jobTypes: [{ key: "furnace_repair", label: "Furnace Repair" }],
+    webhookUrl: "https://example.com/vapi/webhook",
+    variant: "b",
+  });
+  assert.equal(config.name, "Reyes HVAC Services Receptionist (variant b)");
+  assert.equal(config.firstMessage, "hvac emergency or routine? This is Alex at Reyes HVAC Services.");
 });
 
 test("buildAssistantConfig: every tool's server url is the provided webhookUrl", () => {

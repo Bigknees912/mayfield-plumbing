@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { reportError } from "./_sentry.ts";
+import { timingSafeEqual } from "./_timingSafeEqual.ts";
 
 // Called by run_due_automations() (migration 026_automation_email_channel)
 // once a queued automation_runs row for a send_email action comes due -
@@ -14,7 +15,8 @@ import { reportError } from "./_sentry.ts";
 Deno.serve(async (req) => {
   try {
     const providedSecret = req.headers.get("x-webhook-secret");
-    if (!providedSecret || providedSecret !== Deno.env.get("AUTOMATION_WEBHOOK_SECRET")) {
+    const expectedSecret = Deno.env.get("AUTOMATION_WEBHOOK_SECRET");
+    if (!providedSecret || !expectedSecret || !timingSafeEqual(providedSecret, expectedSecret)) {
       return new Response("unauthorized", { status: 401 });
     }
 

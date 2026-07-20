@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data:; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
+<title>Terms of Service — Sable</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+  :root {
+    --bg: #F5F4ED; --card: #FFFFFF; --ink: #1F1E1D; --sub: #83807A;
+    --border: #E5E1D8; --accent: #DA7756; --accent-soft: #F3E3DB; --gold: #E0A94E;
+    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #262624; --card: #302F2C; --ink: #F0EEE8; --sub: #A39E92; --border: #3D3B37; --accent: #E08D6B; --accent-soft: #3A2E27; --gold: #C99544; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; color: var(--ink); background: var(--bg); }
+  h1, h2 { font-family: 'Oswald', sans-serif; font-weight: 600; }
+  a { color: var(--accent); transition: opacity 0.25s var(--ease-smooth); }
+  a.back:hover, footer a:hover { opacity: 0.75; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+  header { position: relative; padding: 28px 0; overflow: hidden; }
+  .header-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(60px); will-change: transform; }
+  .blob.b1 { width: 260px; height: 260px; top: -140px; left: -60px; background: radial-gradient(circle, var(--accent) 0%, transparent 72%); opacity: 0.22; animation: floatBlob1 26s var(--ease-smooth) infinite; }
+  @keyframes floatBlob1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(30px, 20px) scale(1.08); } }
+  @media (prefers-reduced-motion: reduce) { .blob { animation: none !important; } }
+  header .wrap { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  header a.back { color: var(--sub); font-size: 13px; }
+  main { padding: 30px 0 80px; }
+  .updated { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--sub); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  h1.title { font-size: 30px; margin-bottom: 24px; }
+  h2 { font-size: 18px; margin: 32px 0 10px; color: var(--ink); }
+  p, li { font-size: 14.5px; line-height: 1.7; color: var(--ink); margin-bottom: 12px; }
+  ul, ol { padding-left: 22px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 32px; }
+  .notice { background: var(--accent-soft); border-radius: 10px; padding: 16px 18px; font-size: 13px; color: var(--ink); margin-bottom: 28px; line-height: 1.6; }
+  footer { padding: 30px 0; font-size: 12.5px; color: var(--sub); }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer a { color: var(--sub); margin-right: 16px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-bg"><div class="blob b1"></div></div>
+  <div class="wrap">
+    <div class="logo"><span class="dot"></span> Sable</div>
+    <a href="home.html" class="back">← Back to site</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="card">
+      <div class="updated">Last updated: July 20, 2026</div>
+      <h1 class="title">Terms of Service</h1>
+
+      <div class="notice">
+        This is a starting template, not a substitute for legal advice. It has not
+        been reviewed by a lawyer and should be before you rely on it for a real
+        business relationship with paying subscribers.
+      </div>
+
+      <p>These Terms of Service ("Terms") govern access to and use of the Sable
+      platform — the AI phone receptionist and dispatch software described at
+      <a href="home.html">home.html</a> — by a trade business ("you," "Customer")
+      that creates an account or subscribes to a plan. Sable is operated from
+      Calgary, Alberta, Canada. By creating an account, redeeming a join code, or
+      subscribing to a paid plan, you agree to these Terms on behalf of yourself
+      and, if applicable, the business you represent.</p>
+
+      <h2>1. What Sable is</h2>
+      <p>Sable is software: an AI phone receptionist that answers calls, quotes
+      jobs, and books appointments on your behalf, plus dispatch tools (jobs
+      board, calendar, CRM) to run the work that results. Sable is not a
+      plumbing, electrical, HVAC, or other trade contractor, is not a party to
+      any job, quote, or contract between you and your own customers, and is not
+      responsible for the quality, safety, or completion of work your business
+      performs. You remain solely responsible for your licensing, insurance, and
+      the services you provide.</p>
+
+      <h2>2. Accounts, roles, and seats</h2>
+      <p>Your subscription plan (Solo, Team, or Fleet) determines how many team
+      member seats you may have; each technician or office admin who redeems
+      your join code occupies a seat. You're responsible for who you invite and
+      for keeping your join code reasonably private — anyone holding it can join
+      your company account. You may assign each team member a role (Technician
+      or Office Admin) that limits what they can see and do; Sable enforces
+      those limits at the database level, but you remain responsible for
+      choosing appropriate roles for your team.</p>
+
+      <h2>3. Subscription fees and billing</h2>
+      <p>Paid plans are billed monthly in advance through our payment processor,
+      Stripe. A one-time setup fee may apply and is disclosed before you're
+      charged. If your team grows past your plan's seat limit, you'll be asked
+      to upgrade before adding another team member. Fees are non-refundable
+      except where required by law or stated otherwise at signup. We may change
+      plan pricing going forward with reasonable notice; changes don't apply
+      retroactively to a billing period you've already paid for.</p>
+
+      <h2>4. Your data and your customers' data</h2>
+      <p>You own the business data you put into Sable (jobs, clients, calls,
+      estimates). Where Sable's AI receptionist collects personal information
+      from people who call your business (name, phone number, address, and the
+      call recording/transcript itself), you are the data controller for that
+      information and Sable acts as your service provider (processor) in
+      collecting and storing it on your behalf. You're responsible for having
+      whatever consent or notice your own customers require under applicable
+      law (for example, SMS consent before texting them) — Sable gives you the
+      tools to record that consent, but obtaining it is your responsibility.
+      See our <a href="sable-privacy.html">Privacy Policy</a> for how we handle
+      account and platform data more broadly.</p>
+
+      <h2>5. Availability and AI limitations</h2>
+      <p>We aim for high availability of the phone receptionist and dashboard
+      but don't guarantee uninterrupted service — phone carriers, our
+      infrastructure providers (Supabase, Vapi, Twilio, Stripe, Anthropic), and
+      the public internet can all fail independently of anything we control.
+      The AI receptionist can make mistakes: misunderstand a caller, quote
+      outside your intended range, or fail to book correctly. Review quotes and
+      bookings it produces, especially early on, and don't rely on it as a
+      substitute for your own judgment on anything safety-critical.</p>
+
+      <h2>6. Acceptable use</h2>
+      <p>Don't use Sable to harass, defraud, or spam anyone; to attempt to
+      access another company's account or data; to reverse-engineer or scrape
+      the platform; or for any business that isn't a genuine trade/home-services
+      operation. We may suspend or terminate an account that violates this
+      section, with notice where reasonably possible.</p>
+
+      <h2>7. Limitation of liability</h2>
+      <p>To the extent permitted by Alberta law, Sable's total liability for any
+      claim arising from your use of the platform is limited to the fees you
+      paid us in the three months before the claim arose. We are not liable for
+      indirect, incidental, or consequential damages, including lost profits or
+      lost business from a missed call, a mis-quoted job, or platform downtime,
+      except where such limitation is not permitted by law.</p>
+
+      <h2>8. Indemnification</h2>
+      <p>You agree to indemnify Sable against claims arising from the services
+      your business actually performs, your own customer relationships, or your
+      violation of these Terms or applicable law — none of which Sable
+      controls.</p>
+
+      <h2>9. Termination</h2>
+      <p>You may cancel your subscription at any time; access continues through
+      the end of the current billing period. We may suspend or terminate an
+      account for non-payment or a violation of Section 6, with notice where
+      reasonably possible.</p>
+
+      <h2>10. Changes to these Terms</h2>
+      <p>We may update these Terms from time to time. The "Last updated" date at
+      the top of this page reflects the most recent revision. Continued use of
+      the platform after a change means you accept the updated Terms.</p>
+
+      <h2>11. Governing law</h2>
+      <p>These Terms are governed by the laws of the Province of Alberta and the
+      federal laws of Canada applicable within it, without regard to conflict of
+      law principles.</p>
+
+      <h2>12. Contact us</h2>
+      <p>Questions about these Terms? Email us at
+      <a href="mailto:hello@sable.example">hello@sable.example</a>.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a href="home.html">Home</a>
+      <a href="about.html">About</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="sable-terms.html">Terms</a>
+      <a href="sable-privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Sable</div>
+  </div>
+</footer>
+
+</body>
+</html>

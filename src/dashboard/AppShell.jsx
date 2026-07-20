@@ -5,6 +5,8 @@ import { GlobalStyle } from '../auth/ui'
 import { ErrorBanner } from './ui'
 import { tradeIcon } from '../lib/tradeMeta'
 import { getUnreadNotificationCount } from '../lib/notifications'
+import { listLocations } from '../lib/locations'
+import { getMyPlan } from '../lib/plans'
 import { useTableRealtime } from './useTableRealtime'
 import OwnerHome from './OwnerHome'
 import JobsBoard from './JobsBoard'
@@ -18,6 +20,7 @@ import AnalyticsPage from './AnalyticsPage'
 import SettingsPage from './SettingsPage'
 import TechHome from './TechHome'
 import NotificationCenterModal from './NotificationCenterModal'
+import LocationSwitcher from './LocationSwitcher'
 
 const OWNER_TABS = [
   { id: 'home', label: 'Home', icon: Home },
@@ -35,6 +38,16 @@ const TECH_TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
 ]
+// Office Admin (migration 055): manages jobs, calendar, and the clients
+// CRM, but has no route to Settings, pricing config, billing, or the
+// super-admin panel - those tabs simply aren't in this list.
+const OFFICE_ADMIN_TABS = [
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'jobs', label: 'Jobs', icon: KanbanSquare },
+  { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'clients', label: 'Clients', icon: BookUser },
+]
+const ROLE_LABEL = { owner: 'Owner', office_admin: 'Office Admin', tech: 'Technician' }
 
 // Trimmed-down version of app-demo.jsx's AppShell: Map and Insights from
 // the demo aren't wired up yet. Settings currently only has a
@@ -45,7 +58,13 @@ export default function AppShell({ session, profile, onSignOut }) {
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState('')
   const isOwner = profile.role === 'owner'
-  const tabs = isOwner ? OWNER_TABS : TECH_TABS
+  const isOfficeAdmin = profile.role === 'office_admin'
+  // Office admins share the owner's jobs/calendar/clients views (they have
+  // full read/write on those via RLS, see migration 055) but get their own
+  // tab bar so Estimates/Services/Team/Analytics/Winback/Settings stay
+  // hidden - those RPCs/policies are still owner-only.
+  const canManageOfficeTabs = isOwner || isOfficeAdmin
+  const tabs = isOwner ? OWNER_TABS : isOfficeAdmin ? OFFICE_ADMIN_TABS : TECH_TABS
   // Local, updatable copy of the company row: SettingsPage writes changes
   // straight into companies (Pricing & Revenue, financing), and every
   // other tab on this screen should see the new numbers immediately
@@ -55,6 +74,21 @@ export default function AppShell({ session, profile, onSignOut }) {
 
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifOpen, setNotifOpen] = useState(false)
+
+  // Fleet-tier ('pro' plan) multi-location switcher, migration 056 - owner
+  // only, and only worth fetching/showing once a company has more than one
+  // location. null selectedLocationId means "All Locations" (combined
+  // view, the same unfiltered behavior every company had before this).
+  const [locations, setLocations] = useState([])
+  const [selectedLocationId, setSelectedLocationId] = useState(null)
+  useEffect(() => {
+    if (!isOwner) return
+    getMyPlan().then((plan) => {
+      if (plan !== 'pro') return
+      listLocations().then(setLocations).catch(() => {})
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner])
 
   function refreshUnreadCount() {
     getUnreadNotificationCount().then(setUnreadCount).catch(() => {})
@@ -95,10 +129,13 @@ export default function AppShell({ session, profile, onSignOut }) {
             </div>
             <div>
               <div style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink }}>{company?.name || 'Mayfield'}</div>
-              <div style={{ fontSize: 12, color: LIGHT.sub }}>{profile.name} · {isOwner ? 'Owner' : 'Technician'}</div>
+              <div style={{ fontSize: 12, color: LIGHT.sub }}>{profile.name} · {ROLE_LABEL[profile.role] || 'Technician'}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {isOwner && (
+              <LocationSwitcher locations={locations} value={selectedLocationId} onChange={setSelectedLocationId} />
+            )}
             {isOwner && (
               <button className="tap" onClick={() => setNotifOpen(true)} style={{ position: 'relative', width: 36, height: 36, borderRadius: 18, background: LIGHT.card, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
                 <Bell size={16} color={LIGHT.ink} />
@@ -116,14 +153,14 @@ export default function AppShell({ session, profile, onSignOut }) {
         </div>
         <ErrorBanner message={signOutError} onDismiss={() => setSignOutError('')} />
 
-        {tab === 'home' && isOwner && <OwnerHome businessProfile={company} />}
-        {tab === 'home' && !isOwner && <TechHome techId={session.user.id} />}
-        {tab === 'jobs' && isOwner && <JobsBoard company={company} />}
+        {tab === 'home' && canManageOfficeTabs && <OwnerHome businessProfile={company} locations={isOwner ? locations : []} />}
+        {tab === 'home' && !canManageOfficeTabs && <TechHome techId={session.user.id} />}
+        {tab === 'jobs' && canManageOfficeTabs && <JobsBoard company={company} locationId={selectedLocationId} />}
         {tab === 'estimates' && isOwner && <EstimatesPage company={company} />}
-        {tab === 'calendar' && <CalendarPage myTechId={isOwner ? null : session.user.id} />}
-        {tab === 'clients' && isOwner && <ClientsPage company={company} />}
+        {tab === 'calendar' && <CalendarPage myTechId={canManageOfficeTabs ? null : session.user.id} locationId={canManageOfficeTabs ? selectedLocationId : null} />}
+        {tab === 'clients' && canManageOfficeTabs && <ClientsPage company={company} />}
         {tab === 'catalog' && isOwner && <ServiceCatalogPage company={company} />}
-        {tab === 'team' && isOwner && <TeamPage />}
+        {tab === 'team' && isOwner && <TeamPage locations={locations} />}
         {tab === 'analytics' && isOwner && <AnalyticsPage company={company} />}
         {tab === 'automations' && isOwner && <AutomationsPage />}
         {tab === 'settings' && isOwner && <SettingsPage company={company} onSaved={setCompany} />}

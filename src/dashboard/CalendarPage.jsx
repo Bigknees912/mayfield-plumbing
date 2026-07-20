@@ -16,7 +16,7 @@ function todayISO() {
 // simulate-yes/simulate-reschedule buttons are dropped - there's no real
 // SMS backend behind them, and this task is specifically about screens
 // backed by real, persisted data.
-export default function CalendarPage({ myTechId }) {
+export default function CalendarPage({ myTechId, locationId }) {
   const [viewMonth, setViewMonth] = useState(() => { const d = new Date(); d.setDate(1); return d })
   const [selectedDate, setSelectedDate] = useState(todayISO())
   const [jobs, setJobs] = useState([])
@@ -27,11 +27,11 @@ export default function CalendarPage({ myTechId }) {
   const rangeEnd = toISO(m === 11 ? y + 1 : y, m === 11 ? 0 : m + 1, 1)
 
   async function load() {
-    const data = await listJobsInRange(rangeStart, rangeEnd, myTechId ? { techId: myTechId } : {})
+    const data = await listJobsInRange(rangeStart, rangeEnd, { techId: myTechId || undefined, locationId: locationId || undefined })
     setJobs(data)
   }
 
-  const { loading, error, reload } = useAsyncData(load, [rangeStart, rangeEnd, myTechId])
+  const { loading, error, reload } = useAsyncData(load, [rangeStart, rangeEnd, myTechId, locationId])
 
   const jobCountByDate = useMemo(() => {
     const map = {}

@@ -20,7 +20,7 @@ function depositAmount(high, depositPct) {
 // picker is real haversine math (lib/jobs.js's distanceKm) instead of the
 // demo's fake per-pair hash, but shows "—" until jobs/techs actually have
 // lat/lng - there's no geocoding pipeline wired up yet.
-export default function JobsBoard({ company }) {
+export default function JobsBoard({ company, locationId }) {
   const [jobs, setJobs] = useState([])
   const [techs, setTechs] = useState([])
   const [techLocations, setTechLocations] = useState({})
@@ -37,7 +37,7 @@ export default function JobsBoard({ company }) {
 
   async function load() {
     const [j, t, locs, jt, p, jtp, stock] = await Promise.all([
-      listJobs(), listTeamTechs(), listTechLocationsById(), listJobTypes(),
+      listJobs({ locationId }), listTeamTechs({ locationId }), listTechLocationsById(), listJobTypes(),
       listParts(), listJobTypePartsMap(), listTechPartStockMap(),
     ])
     setJobs(j)
@@ -49,7 +49,10 @@ export default function JobsBoard({ company }) {
     setTechStockMap(stock)
   }
 
-  const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [])
+  // Re-fetches when the owner flips the location switcher (migration 056) -
+  // same effect dependency shape useAsyncData already gives every other
+  // page that takes a filter prop.
+  const { loading, error, hasLoadedOnce, reload } = useAsyncData(load, [locationId])
 
   // Picks up a job Alex books over the phone (or any other change) live,
   // without a manual refresh.

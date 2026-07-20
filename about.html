@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data: https://images.unsplash.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
 <title>About Sable</title>
 <meta name="description" content="Why Sable exists, and what it's like to run a trade business on it.">
 <style>
@@ -16,6 +17,8 @@
     --border: #E5E1D8;
     --accent: #DA7756;
     --accent-soft: #F3E3DB;
+    --gold: #E0A94E;
+    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -26,6 +29,7 @@
       --border: #3D3B37;
       --accent: #E08D6B;
       --accent-soft: #3A2E27;
+      --gold: #C99544;
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -42,25 +46,45 @@
   .intro-el.d2 { animation-delay: 0.14s; }
   @keyframes introIn { to { opacity: 1; transform: translateY(0); } }
 
-  .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.55s ease, transform 0.55s ease; }
+  .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.7s var(--ease-smooth), transform 0.7s var(--ease-smooth); }
   .reveal.in { opacity: 1; transform: translateY(0); }
 
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .intro-el, .reveal { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+    .intro-el, .reveal, .blob, .scroll-img { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
+    .scroll-img.is-link:hover img { transform: none !important; }
   }
+
+  /* Scroll/hover image reveal - see the IntersectionObserver script near
+     the bottom of the page. */
+  .scroll-img { display: block; opacity: 0; transform: translateY(28px); transition: opacity 0.36s var(--ease-smooth), transform 0.36s var(--ease-smooth); border-radius: 20px; overflow: hidden; }
+  .scroll-img.in { opacity: 1; transform: translateY(0); }
+  .scroll-img img { display: block; width: 100%; height: auto; transition: transform 0.3s var(--ease-smooth); }
+  .scroll-img.is-link { cursor: pointer; }
+  .scroll-img.is-link:hover img { transform: scale(1.04); }
+  .scroll-img-caption { margin-top: 12px; font-size: 13px; color: var(--sub); }
 
   nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; padding: 18px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
   nav .wrap { max-width: 1080px; display: flex; align-items: center; justify-content: space-between; }
   .logo { font-family: 'Oswald', sans-serif; color: var(--ink); font-size: 19px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
   .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   .nav-links { display: flex; align-items: center; gap: 26px; }
-  .nav-links a { color: var(--sub); font-size: 13.5px; font-weight: 500; }
+  .nav-links a { color: var(--sub); font-size: 13.5px; font-weight: 500; transition: color 0.3s var(--ease-smooth); }
   .nav-links a:hover { color: var(--ink); }
-  .nav-cta { background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 8px; }
+  .nav-cta { background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 8px; transition: opacity 0.3s var(--ease-smooth), transform 0.3s var(--ease-smooth); }
+  .nav-cta:hover { opacity: 0.88; transform: translateY(-1px); }
   @media (max-width: 720px) { .nav-links a:not(.nav-cta) { display: none; } }
 
-  .page-head { padding: 150px 0 20px; }
+  .page-head { position: relative; padding: 150px 0 20px; overflow: hidden; }
+  .page-head-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(70px); will-change: transform; }
+  .blob.b1 { width: 380px; height: 380px; top: -160px; left: -80px; background: radial-gradient(circle, var(--accent) 0%, transparent 72%); opacity: 0.35; animation: floatBlob1 24s var(--ease-smooth) infinite; }
+  .blob.b2 { width: 300px; height: 300px; top: -60px; right: -100px; background: radial-gradient(circle, var(--gold) 0%, transparent 72%); opacity: 0.28; animation: floatBlob2 28s var(--ease-smooth) infinite; }
+  @keyframes floatBlob1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, 30px) scale(1.08); } }
+  @keyframes floatBlob2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-30px, 35px) scale(0.94); } }
+  /* .page-head doubles as .wrap (no separate full-width outer element on
+     this page), so the blob field is just its first child, painted below
+     every later sibling by DOM order - no z-index juggling needed. */
   .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 16px; text-transform: uppercase; }
   .page-head h1 { font-size: 40px; line-height: 1.15; color: var(--ink); max-width: 640px; }
 
@@ -95,7 +119,8 @@
   .cta-band { background: var(--ink); color: var(--bg); border-radius: 20px; padding: 48px 40px; text-align: center; }
   .cta-band h2 { color: var(--bg); font-size: 24px; margin-bottom: 12px; }
   .cta-band p { color: rgba(245,244,237,0.72); font-size: 14.5px; margin-bottom: 22px; }
-  .btn-primary { background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; padding: 13px 22px; border-radius: 10px; display: inline-block; }
+  .btn-primary { background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; padding: 13px 22px; border-radius: 10px; display: inline-block; transition: opacity 0.3s var(--ease-smooth), transform 0.3s var(--ease-smooth); }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
 
   footer { border-top: 1px solid var(--border); padding: 36px 0; }
   footer .wrap { max-width: 1080px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--sub); }
@@ -119,6 +144,7 @@
 </nav>
 
 <div class="page-head wrap">
+  <div class="page-head-bg"><div class="blob b1"></div><div class="blob b2"></div></div>
   <div class="eyebrow intro-el d1">About</div>
   <h1 class="intro-el d2">Software built by someone who's actually missed the call.</h1>
 </div>
@@ -174,6 +200,20 @@
         <p>You already know how to run the business. Sable just makes sure fewer jobs slip through.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <a class="scroll-img is-link" href="pricing.html" aria-label="See pricing">
+      <img
+        src="https://images.unsplash.com/photo-6dCFBWET48s?auto=format&fit=crop&w=1600&q=80"
+        alt="A plumber fixing a kitchen sink"
+        loading="lazy"
+        onerror="this.closest('.scroll-img').style.display='none'"
+      >
+    </a>
+    <div class="scroll-img-caption">Real jobs, real customers — the software just makes sure fewer of them get missed.</div>
   </div>
 </section>
 
@@ -238,8 +278,8 @@
     <div>
       <a href="home.html" style="margin-right:14px;">Home</a>
       <a href="pricing.html" style="margin-right:14px;">Pricing</a>
-      <a href="terms.html" style="margin-right:14px;">Terms</a>
-      <a href="privacy.html">Privacy</a>
+      <a href="sable-terms.html" style="margin-right:14px;">Terms</a>
+      <a href="sable-privacy.html">Privacy</a>
     </div>
   </div>
 </footer>
@@ -261,6 +301,24 @@
   } else {
     document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in'));
   }
+
+  // Scroll-in image reveal - same behavior as home.html's, kept in its own
+  // scope so its IntersectionObserver doesn't collide with the .reveal one
+  // above.
+  (() => {
+    const scrollImgs = document.querySelectorAll('.scroll-img');
+    if (reduceMotion) {
+      scrollImgs.forEach((el) => el.classList.add('in'));
+      return;
+    }
+    const imgIo = new IntersectionObserver((entries) => {
+      entries.filter((e) => e.isIntersecting).forEach((entry, i) => {
+        imgIo.unobserve(entry.target);
+        setTimeout(() => entry.target.classList.add('in'), i * 90);
+      });
+    }, { threshold: 0.2, rootMargin: '0px 0px -40px 0px' });
+    scrollImgs.forEach((el) => imgIo.observe(el));
+  })();
 </script>
 
 </body>

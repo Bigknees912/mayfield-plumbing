@@ -46,6 +46,16 @@ export async function planRequiresCheckout(planKey) {
   return Number(data?.monthly_price) > 0
 }
 
+// The caller's own company's plan key (e.g. 'pro') - used to gate
+// Fleet-tier-only features like the multi-location switcher. RLS scopes
+// `subscriptions` to the caller's company already, so no company_id
+// filter is needed here.
+export async function getMyPlan() {
+  const { data, error } = await supabase.from('subscriptions').select('plan').maybeSingle()
+  if (error) throw error
+  return data?.plan || null
+}
+
 // Calls create-subscription-checkout and returns the Stripe-hosted
 // Checkout URL to redirect to. Only valid for a plan that already has a
 // subscriptions row (i.e. after createCompanyAndOwner has run) - the edge

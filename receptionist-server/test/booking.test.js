@@ -57,6 +57,44 @@ test("createBooking: a returning caller (matched by phone) doesn't get a duplica
   assert.equal(fake.table("jobs").rows[0].customer_id, "existing-customer-id");
 });
 
+test("createBooking: an existing lead's pipeline stage advances to booked, it doesn't stay stuck at new_lead/quoted", async () => {
+  const fake = createFakeSupabase({
+    customers: [{ id: "lead-id", company_id: COMPANY_ID, phone: "+15559998888", name: "Lead Customer", pipeline_stage: "quoted" }],
+  });
+  const slot = buildCandidates("standard")[2];
+
+  await createBooking({
+    companyId: COMPANY_ID,
+    slot: slot.label,
+    jobType: "faucet",
+    address: "789 Pine St",
+    customerPhone: "+15559998888",
+    customerName: "Lead Customer",
+    supabaseClient: fake,
+  });
+
+  assert.equal(fake.table("customers").rows[0].pipeline_stage, "booked");
+});
+
+test("createBooking: never regresses a customer who's already past booked (e.g. completed) back to booked", async () => {
+  const fake = createFakeSupabase({
+    customers: [{ id: "repeat-id", company_id: COMPANY_ID, phone: "+15559998888", name: "Repeat Customer", pipeline_stage: "completed" }],
+  });
+  const slot = buildCandidates("standard")[3];
+
+  await createBooking({
+    companyId: COMPANY_ID,
+    slot: slot.label,
+    jobType: "faucet",
+    address: "321 Birch Rd",
+    customerPhone: "+15559998888",
+    customerName: "Repeat Customer",
+    supabaseClient: fake,
+  });
+
+  assert.equal(fake.table("customers").rows[0].pipeline_stage, "completed", "a repeat booking for an already-completed customer shouldn't move them backward on the board");
+});
+
 test("createBooking: rejects a structured slot that's already booked, and doesn't create a job", async () => {
   const slot = buildCandidates("standard")[0];
   const fake = createFakeSupabase({
