@@ -163,9 +163,16 @@
   const micLabel = document.getElementById("micLabel");
 
   function addBubble(who, text) {
+    // Built with textContent, not innerHTML - `text` here can be the
+    // caller's own speech-to-text transcript (or Claude's reply), and
+    // neither should ever be interpreted as HTML.
     const div = document.createElement("div");
     div.className = "bubble " + (who === "Alex" ? "ai" : "caller");
-    div.innerHTML = '<div class="who">' + who + '</div>' + text;
+    const whoEl = document.createElement("div");
+    whoEl.className = "who";
+    whoEl.textContent = who;
+    div.appendChild(whoEl);
+    div.appendChild(document.createTextNode(text));
     transcriptEl.appendChild(div);
     transcriptEl.scrollTop = transcriptEl.scrollHeight;
   }
@@ -212,8 +219,13 @@
     }
     content.innerHTML = html;
   }
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
   function row(label, value) {
-    return '<div class="field-row"><span class="k">' + label + '</span><span class="v ' + (value ? "" : "pending") + '">' + (value || "pending…") + '</span></div>';
+    // value can be the caller's own spoken address (free text, not an
+    // enum) - escape it before it goes into innerHTML below.
+    return '<div class="field-row"><span class="k">' + escapeHtml(label) + '</span><span class="v ' + (value ? "" : "pending") + '">' + (value ? escapeHtml(value) : "pending…") + '</span></div>';
   }
 
   function buildSystemPrompt() {

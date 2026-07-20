@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { reportError } from "./_sentry.ts";
+import { timingSafeEqual } from "./_timingSafeEqual.ts";
 
 // DEAD CODE as of migration 024_retire_hardcoded_review_trigger_and_seed_default:
 // the trigger that used to call this (jobs_completed_send_review) was
@@ -13,7 +14,8 @@ import { reportError } from "./_sentry.ts";
 Deno.serve(async (req) => {
   try {
     const providedSecret = req.headers.get("x-webhook-secret");
-    if (!providedSecret || providedSecret !== Deno.env.get("JOB_COMPLETED_WEBHOOK_SECRET")) {
+    const expectedSecret = Deno.env.get("JOB_COMPLETED_WEBHOOK_SECRET");
+    if (!providedSecret || !expectedSecret || !timingSafeEqual(providedSecret, expectedSecret)) {
       return new Response("unauthorized", { status: 401 });
     }
 

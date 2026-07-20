@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { reportError } from "./_sentry.ts";
+import { timingSafeEqual } from "./_timingSafeEqual.ts";
 
 // Called by the jobs_started_send_on_the_way DB trigger (migration
 // 017_on_the_way_sms_on_job_started) the instant a job's status becomes
@@ -24,7 +25,8 @@ import { reportError } from "./_sentry.ts";
 Deno.serve(async (req) => {
   try {
     const providedSecret = req.headers.get("x-webhook-secret");
-    if (!providedSecret || providedSecret !== Deno.env.get("JOB_STARTED_WEBHOOK_SECRET")) {
+    const expectedSecret = Deno.env.get("JOB_STARTED_WEBHOOK_SECRET");
+    if (!providedSecret || !expectedSecret || !timingSafeEqual(providedSecret, expectedSecret)) {
       return new Response("unauthorized", { status: 401 });
     }
 
