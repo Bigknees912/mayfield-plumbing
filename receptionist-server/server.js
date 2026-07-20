@@ -3,8 +3,8 @@ const Sentry = require("./instrument"); // must load before anything else - see 
 const express = require("express");
 const { calcQuote } = require("./lib/pricing");
 const { nextAvailableSlots } = require("./lib/scheduling");
-const { recordQuote, createBooking } = require("./lib/booking");
-const { getCompanyId, validateEnv } = require("./lib/supabase");
+const { recordQuote, createBooking, findOrCreateLeadForCall, escalateToHuman } = require("./lib/booking");
+const { getCompanyId, getSupabase, validateEnv } = require("./lib/supabase");
 const { validateBookingArgs, validateQuoteArgs } = require("./lib/validate");
 const { isRateLimited } = require("./lib/rateLimiter");
 
@@ -60,11 +60,39 @@ function rateLimitKey(toolName, callContext) {
 // message.call. That shape is per Vapi's documented server-message format -
 // worth double-checking against a real call's payload (e.g. via get_logs)
 // the first time you test this live, since it's untested against an actual
-// call from this end.
+// call from this end. Vapi also sends other message.type values to this
+// same URL (status updates, an end-of-call report with the full
+// transcript) - handled below, but the exact field names/shape are equally
+// unverified against a real call and worth confirming the same way.
 app.post("/vapi/webhook", checkAuth, async (req, res) => {
-  const toolCalls = req.body?.message?.toolCallList || [];
-  const call = req.body?.message?.call || {};
-  const callContext = { vapiCallId: call.id, customerPhone: call.customer?.number };
+  const message = req.body?.message || {};
+  const call = message.call || {};
+  // The variant tag baked into this deployment's own webhook URL by
+  // generate-assistant.js (?variant=a|b) - not per-call from Vapi, since
+  // an inbound call has no opinion on which prompt variant it got, the
+  // deployment does. Read once per request; cheap enough not to cache.
+  const promptVariant = typeof req.query.variant === "string" ? req.query.variant : null;
+  const callContext = { vapiCallId: call.id, customerPhone: call.customer?.number, customerName: call.customer?.name };
+
+  if (message.type === "end-of-call-report") {
+    await handleEndOfCallReport(message, callContext);
+    return res.json({ received: true });
+  }
+
+  // Best-effort "call started" signal - creates the lead the instant we
+  // know who's calling, so a caller who never triggers get_quote (asks
+  // something out of scope, or just hangs up) still shows up as a
+  // new_lead. If this message.type guess is wrong for your Vapi account,
+  // the get_quote/escalate_to_human paths in runTool() still create the
+  // lead on first tool call either way - this is strictly earlier, not the
+  // only path.
+  if (message.type === "status-update" && message.status === "in-progress" && callContext.vapiCallId) {
+    findOrCreateLeadForCall({ companyId: getCompanyId(), ...callContext, promptVariant })
+      .catch((err) => console.error("call-start lead capture failed (non-fatal):", err.message));
+    return res.json({ received: true });
+  }
+
+  const toolCalls = message.toolCallList || [];
 
   const results = await Promise.all(
     toolCalls.map(async (toolCall) => {
@@ -73,7 +101,7 @@ app.post("/vapi/webhook", checkAuth, async (req, res) => {
             (RATE_LIMITS[toolCall.name] && isRateLimited(rateLimitKey(toolCall.name, callContext), RATE_LIMITS[toolCall.name]))) {
           return { toolCallId: toolCall.id, result: "Error: too many requests from this caller recently - please try again later." };
         }
-        const output = await runTool(toolCall.name, toolCall.arguments || {}, callContext);
+        const output = await runTool(toolCall.name, toolCall.arguments || {}, callContext, promptVariant);
         return { toolCallId: toolCall.id, result: JSON.stringify(output) };
       } catch (err) {
         // Without this, a broken booking/quote just becomes a vague thing
@@ -87,7 +115,29 @@ app.post("/vapi/webhook", checkAuth, async (req, res) => {
   res.json({ results });
 });
 
-async function runTool(name, args, callContext) {
+// Vapi's end-of-call payload shape for the transcript/duration fields is
+// unverified here - confirm against a real call before relying on this.
+// Non-fatal either way: a missing transcript shouldn't be a 500 to Vapi.
+async function handleEndOfCallReport(message, callContext) {
+  if (!callContext.vapiCallId) return;
+  try {
+    const supabase = getSupabase();
+    const patch = {};
+    if (typeof message.transcript === "string") patch.transcript = message.transcript;
+    if (typeof message.durationSeconds === "number") patch.duration_seconds = Math.round(message.durationSeconds);
+    if (!patch.ended_at) patch.ended_at = new Date().toISOString();
+    const { data: existing } = await supabase.from("calls").select("id, outcome").eq("vapi_call_id", callContext.vapiCallId).maybeSingle();
+    if (!existing) return; // Nothing was ever recorded for this call - no tool ran, no lead to attach a transcript to.
+    // "abandoned" is the row's default outcome (see findOrCreateLeadForCall)
+    // until quoted/booked/transferred overwrites it - leave a real outcome
+    // alone, only fill in the still-default one.
+    await supabase.from("calls").update(patch).eq("id", existing.id);
+  } catch (err) {
+    console.error("handleEndOfCallReport failed (non-fatal):", err.message);
+  }
+}
+
+async function runTool(name, args, callContext, promptVariant) {
   const companyId = getCompanyId();
 
   switch (name) {
@@ -108,6 +158,7 @@ async function runTool(name, args, callContext) {
         urgency: validated.urgency,
         property: validated.property,
         quote: q,
+        promptVariant,
       });
       return {
         jobLabel: q.jobLabel,
@@ -137,6 +188,18 @@ async function runTool(name, args, callContext) {
       });
       if (!result.ok) return { booked: false, reason: result.reason };
       return { booked: true, slot: validated.slot };
+    }
+
+    case "escalate_to_human": {
+      const reason = typeof args.reason === "string" ? args.reason.slice(0, 300) : "unspecified";
+      await escalateToHuman({
+        companyId,
+        vapiCallId: callContext.vapiCallId,
+        customerPhone: callContext.customerPhone,
+        reason,
+        promptVariant,
+      });
+      return { escalated: true };
     }
 
     default:

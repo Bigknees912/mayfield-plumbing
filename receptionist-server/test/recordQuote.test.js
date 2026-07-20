@@ -88,7 +88,11 @@ test("recordQuote: links the estimate to an existing customer when the phone num
   assert.equal(estimate.customer_id, "existing-customer");
 });
 
-test("recordQuote: a brand-new caller's estimate has no customer_id yet - not created eagerly at quote time", async () => {
+test("recordQuote: a brand-new caller becomes a new_lead immediately, even before they book", async () => {
+  // A quote alone must be enough to create the lead - a caller who gets
+  // quoted and hangs up without booking still needs to show up on the
+  // pipeline board at "new_lead", not disappear because they never
+  // triggered book_appointment.
   const fake = createFakeSupabase();
 
   await recordQuote({
@@ -102,10 +106,28 @@ test("recordQuote: a brand-new caller's estimate has no customer_id yet - not cr
     supabaseClient: fake,
   });
 
-  assert.equal(fake.table("customers").rows.length, 0, "quoting alone should never create a customer record");
+  assert.equal(fake.table("customers").rows.length, 1, "quoting a new caller should create exactly one lead");
+  const customer = fake.table("customers").rows[0];
+  assert.equal(customer.phone, "+15550009999");
+  assert.equal(customer.pipeline_stage, "quoted", "get_quote advances a brand-new lead straight to quoted");
+
+  const call = fake.table("calls").rows[0];
+  assert.equal(call.customer_id, customer.id);
+
   const estimate = fake.table("estimates").rows[0];
-  assert.equal(estimate.customer_id, null);
+  assert.equal(estimate.customer_id, customer.id);
   assert.equal(estimate.customer_phone, "+15550009999");
+});
+
+test("recordQuote: a second quote for the same caller doesn't create a duplicate lead", async () => {
+  const fake = createFakeSupabase();
+  const shared = { companyId: COMPANY_ID, vapiCallId: "vapi-5", customerPhone: "+15551230000", jobType: "drain", urgency: "standard", property: "residential", supabaseClient: fake };
+
+  await recordQuote({ ...shared, quote: { low: 200, high: 240, jobLabel: "Drain Cleaning" } });
+  await recordQuote({ ...shared, quote: { low: 210, high: 250, jobLabel: "Drain Cleaning" } });
+
+  assert.equal(fake.table("customers").rows.length, 1, "re-quoting the same caller should not create a second lead");
+  assert.equal(fake.table("calls").rows.length, 1, "re-quoting the same call should update, not duplicate, the calls row");
 });
 
 test("recordQuote: with no vapiCallId, does nothing (no calls row, no estimate) rather than erroring", async () => {

@@ -67,6 +67,68 @@ async function upsertEstimateForCall(supabase, companyId, callId, { customerPhon
 }
 
 /**
+ * Finds or creates a `customers` row for this caller and a `calls` row
+ * linking to it, as early in the conversation as possible - a real lead in
+ * the CRM pipeline (at "new_lead") the instant we know who's calling, not
+ * only once they book. Idempotent: safe to call from every tool handler
+ * (get_quote, escalate_to_human, a future call-start webhook event, ...)
+ * without creating duplicate customers or calls rows for the same call.
+ * Never throws - same "logging must never break a live call" reasoning as
+ * recordQuote/createBooking.
+ */
+async function findOrCreateLeadForCall({ companyId, vapiCallId, customerPhone, customerName, promptVariant, supabaseClient }) {
+  const supabase = supabaseClient || getSupabase();
+  try {
+    let customerId = null;
+    if (customerPhone) {
+      const { data: existing } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("phone", customerPhone)
+        .maybeSingle();
+      customerId = existing?.id || null;
+      if (!customerId) {
+        const { data: created, error: createError } = await withRetry(() =>
+          supabase
+            .from("customers")
+            .insert({ company_id: companyId, name: customerName || "Phone caller", phone: customerPhone, pipeline_stage: "new_lead" })
+            .select("id")
+            .single()
+        );
+        if (createError) throw createError;
+        customerId = created.id;
+      }
+    }
+
+    if (!vapiCallId) return customerId;
+    const { data: existingCall } = await supabase.from("calls").select("id, customer_id, prompt_variant").eq("vapi_call_id", vapiCallId).maybeSingle();
+    if (existingCall) {
+      // Don't clobber a customer_id a later step (recordQuote/createBooking)
+      // may have already matched more specifically, or a prompt_variant
+      // already stamped by an earlier call to this same function.
+      const patch = {};
+      if (!existingCall.customer_id && customerId) patch.customer_id = customerId;
+      if (!existingCall.prompt_variant && promptVariant) patch.prompt_variant = promptVariant;
+      if (Object.keys(patch).length > 0) await supabase.from("calls").update(patch).eq("id", existingCall.id);
+    } else {
+      await supabase.from("calls").insert({
+        company_id: companyId,
+        vapi_call_id: vapiCallId,
+        customer_phone: customerPhone || null,
+        customer_id: customerId,
+        prompt_variant: promptVariant || null,
+        outcome: "abandoned", // overwritten by recordQuote/createBooking/escalate as the call progresses
+      });
+    }
+    return customerId;
+  } catch (err) {
+    console.error("findOrCreateLeadForCall failed (non-fatal, call continues):", err.message);
+    return null;
+  }
+}
+
+/**
  * Upserts a `calls` row keyed by Vapi's call id every time get_quote runs,
  * so the row tracks the conversation's latest quote even if the caller
  * asks for a couple of variations before booking - and so book_appointment
@@ -74,14 +136,16 @@ async function upsertEstimateForCall(supabase, companyId, callId, { customerPhon
  * back up. Never throws - a logging hiccup here shouldn't break a live
  * call's ability to get a price.
  */
-async function recordQuote({ companyId, vapiCallId, customerPhone, jobType, urgency, property, quote, supabaseClient }) {
+async function recordQuote({ companyId, vapiCallId, customerPhone, jobType, urgency, property, quote, promptVariant, supabaseClient }) {
   if (!vapiCallId) return;
   const supabase = supabaseClient || getSupabase();
   try {
+    const customerId = await findOrCreateLeadForCall({ companyId, vapiCallId, customerPhone, promptVariant, supabaseClient: supabase });
     const jobTypeRow = await getJobType(supabase, companyId, jobType);
     const patch = {
       company_id: companyId,
       customer_phone: customerPhone || null,
+      customer_id: customerId,
       job_type_id: jobTypeRow?.id || null,
       urgency: urgency || null,
       property_type: property || null,
@@ -97,9 +161,54 @@ async function recordQuote({ companyId, vapiCallId, customerPhone, jobType, urge
       const { data: created } = await supabase.from("calls").insert({ ...patch, vapi_call_id: vapiCallId }).select("id").single();
       callId = created?.id;
     }
+    if (customerId) {
+      // A quote is real pipeline movement - "new_lead" was just "we know
+      // who called", "quoted" is "we've told them a price". Only advances
+      // forward, never backward (e.g. a customer already "booked" from a
+      // prior job who calls again for a quote shouldn't regress).
+      await advancePipelineStage(supabase, customerId, "quoted");
+    }
     await upsertEstimateForCall(supabase, companyId, callId, { customerPhone, jobTypeRow, quote });
   } catch (err) {
     console.error("recordQuote failed (non-fatal, call continues):", err.message);
+  }
+}
+
+const STAGE_ORDER = ["new_lead", "contacted", "quoted", "booked", "completed", "nurture"];
+async function advancePipelineStage(supabase, customerId, targetStage) {
+  const { data: current } = await supabase.from("customers").select("pipeline_stage").eq("id", customerId).maybeSingle();
+  const currentIdx = STAGE_ORDER.indexOf(current?.pipeline_stage);
+  const targetIdx = STAGE_ORDER.indexOf(targetStage);
+  if (targetIdx === -1) return;
+  if (currentIdx === -1 || targetIdx > currentIdx) {
+    await supabase.from("customers").update({ pipeline_stage: targetStage }).eq("id", customerId);
+  }
+}
+
+/**
+ * Handles a caller asking for something Alex genuinely can't help with (a
+ * billing dispute, a complaint about past work, an unrelated trade) - logs
+ * it as a lead needing a human callback rather than guessing an answer.
+ * "transferred" is an existing calls.outcome value (see migration
+ * 002_jobs_domain) - this is the first thing to actually set it.
+ */
+async function escalateToHuman({ companyId, vapiCallId, customerPhone, reason, promptVariant, supabaseClient }) {
+  const supabase = supabaseClient || getSupabase();
+  try {
+    const customerId = await findOrCreateLeadForCall({ companyId, vapiCallId, customerPhone, promptVariant, supabaseClient: supabase });
+    if (vapiCallId) {
+      await supabase.from("calls").update({ outcome: "transferred", ended_at: new Date().toISOString() }).eq("vapi_call_id", vapiCallId);
+    }
+    if (customerId) {
+      await supabase.from("customer_interactions").insert({
+        company_id: companyId,
+        customer_id: customerId,
+        type: "call",
+        body: `Caller asked something outside Alex's scope: ${reason || "unspecified"}. Needs a human callback.`,
+      });
+    }
+  } catch (err) {
+    console.error("escalateToHuman failed (non-fatal, call continues):", err.message);
   }
 }
 
@@ -180,10 +289,9 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
   if (!customerId) {
     // pipeline_stage: "booked" - a job is being created in the same
     // request, same convention as the dashboard app's findOrCreateCustomer
-    // (src/lib/jobs.js). Only applies to a brand-new customer; an existing
-    // match's stage above is left untouched. Wrapped in withRetry - a
-    // booking made live over the phone has no "try again" button, so a
-    // momentary network blip here shouldn't lose it.
+    // (src/lib/jobs.js). Wrapped in withRetry - a booking made live over
+    // the phone has no "try again" button, so a momentary network blip
+    // here shouldn't lose it.
     const { data: created, error: createError } = await withRetry(() =>
       supabase
         .from("customers")
@@ -193,6 +301,12 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
     );
     if (createError) throw createError;
     customerId = created.id;
+  } else {
+    // An existing customer (already a lead from an earlier call, or a
+    // repeat customer) advances to "booked" too - previously this branch
+    // left their stage untouched, so a lead who'd been quoted never moved
+    // forward on the pipeline board even after actually booking.
+    await advancePipelineStage(supabase, customerId, "booked");
   }
 
   await applySmsConsent(supabase, companyId, customerId, smsConsent);
@@ -235,7 +349,7 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
   }
 
   if (call) {
-    await supabase.from("calls").update({ outcome: "booked", address, ended_at: new Date().toISOString() }).eq("id", call.id);
+    await supabase.from("calls").update({ outcome: "booked", address, customer_id: customerId, ended_at: new Date().toISOString() }).eq("id", call.id);
     // Closes the loop on the Estimates page: the quote given earlier in
     // this same call just turned into a real booking, so it's no longer
     // sitting unfollowed-up - non-fatal, a booking that already succeeded
@@ -250,4 +364,4 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
   return { ok: true, job };
 }
 
-module.exports = { recordQuote, createBooking, applySmsConsent };
+module.exports = { recordQuote, createBooking, applySmsConsent, findOrCreateLeadForCall, escalateToHuman };
