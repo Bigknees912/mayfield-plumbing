@@ -129,7 +129,7 @@ export default function App() {
   const [companyCode, setCompanyCode] = useState("SABLE-4K2P");
   const [team, setTeam] = useState(INITIAL_TEAM);
   const [jobs, setJobs] = useState(INITIAL_JOBS);
-  const [screen, setScreen] = useState("login");
+  const [screen, setScreen] = useState("home");
   const [pendingOwner, setPendingOwner] = useState(null);
   const [businessProfile, setBusinessProfile] = useState({ trade: "Plumbing", teamSize: "2-5", serviceArea: "Calgary and surrounding areas" });
   const [themeVersion, setThemeVersion] = useState(0);
@@ -139,9 +139,13 @@ export default function App() {
     setThemeVersion((v) => v + 1);
   }
 
+  // Auth success always lands on the dashboard - this is the one place a
+  // post-auth redirect belongs. Landing on the marketing site never does
+  // this (see the gating block below).
   function loginDemo(role) {
     if (role === "owner") setSession({ role: "owner", name: "Owner", initials: "O", plan: "growth", theme: "light" });
     else setSession({ role: "tech", id: "u1", name: "Dave Martinez", initials: "DM", plan: "growth", theme: "light" });
+    setScreen("app");
   }
   function startOwnerSignup(businessName, name) {
     setPendingOwner({ businessName, name });
@@ -152,6 +156,7 @@ export default function App() {
     const code = randomCode();
     setCompanyCode(code);
     setSession({ role: "owner", name: pendingOwner?.name || "Owner", initials: initialsOf(pendingOwner?.name || "Owner"), plan: "growth", theme: "light" });
+    setScreen("app");
   }
   function createEmployeeAccount(name, code) {
     if (code.trim().toUpperCase() !== companyCode) return false;
@@ -159,6 +164,7 @@ export default function App() {
     const newTech = { id, name, email: "", initials: initialsOf(name) };
     setTeam([...team, newTech]);
     setSession({ role: "tech", id, name, initials: newTech.initials, plan: "growth", theme: "light" });
+    setScreen("app");
     return true;
   }
   function assignJob(jobId, techId) {
@@ -175,12 +181,30 @@ export default function App() {
     setJobs(jobs.map((j) => (j.techId === id ? { ...j, techId: null, status: "unassigned" } : j)));
   }
 
-  if (!session) {
+  // Public marketing pages come first and are available to EVERYONE, signed
+  // in or not. Landing on the homepage never force-redirects an authenticated
+  // user into their dashboard - if a session exists, the nav simply offers a
+  // "Dashboard" button they can choose to click.
+  if (screen === "home" || screen === "pricing") {
+    return (
+      <PublicSite
+        screen={screen}
+        session={session}
+        onNavigate={setScreen}
+        onGoDashboard={() => setScreen("app")}
+        onLogout={() => { setSession(null); setScreen("home"); setTheme("light"); }}
+      />
+    );
+  }
+
+  // Auth screens: only reached by an explicit Log In / Get Started / Sign Up
+  // click, never as the default landing view.
+  if (!session || screen !== "app") {
     if (screen === "signup-choice") return <SignupChoice onBack={() => setScreen("login")} onPickOwner={() => setScreen("signup-owner")} onPickEmployee={() => setScreen("signup-employee")} />;
     if (screen === "signup-owner") return <OwnerSignup onBack={() => setScreen("signup-choice")} onCreate={startOwnerSignup} />;
     if (screen === "onboarding") return <Onboarding onFinish={finishOnboarding} />;
     if (screen === "signup-employee") return <EmployeeSignup onBack={() => setScreen("signup-choice")} onCreate={createEmployeeAccount} />;
-    return <LoginScreen onLogin={loginDemo} onSignup={() => setScreen("signup-choice")} />;
+    return <LoginScreen onLogin={loginDemo} onSignup={() => setScreen("signup-choice")} onBack={() => setScreen("home")} />;
   }
 
   return (
@@ -188,13 +212,206 @@ export default function App() {
       key={themeVersion}
       session={session}
       businessProfile={businessProfile}
-      onLogout={() => { setSession(null); setScreen("login"); setTheme("light"); }}
+      onLogout={() => { setSession(null); setScreen("home"); setTheme("light"); }}
+      onGoHome={() => setScreen("home")}
       team={team} jobs={jobs} companyCode={companyCode}
       onRegenerateCode={() => setCompanyCode(randomCode())}
       onAssignJob={assignJob} onAdvanceJob={advanceJob} onRemoveTeamMember={removeTeamMember}
       onUpdateJobNotes={updateJobNotes}
       onSetTheme={setTheme}
     />
+  );
+}
+
+/* ---------------- PUBLIC MARKETING SITE ---------------- */
+
+// The public half of the product, ported from marketing-site.html into the
+// same design system the dashboard uses (the warm LIGHT palette above), so
+// the marketing pages and the logged-in app read as one website rather than
+// two bolted-together templates. Anyone can see these pages; the nav is the
+// only path into the auth flow, and it adapts to whether a session already
+// exists.
+function PublicNav({ screen, session, onNavigate, onGoDashboard, onLogout }) {
+  const link = { color: LIGHT.sub, fontSize: 13.5, fontWeight: 500, cursor: "pointer" };
+  return (
+    <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(245,244,237,0.86)", backdropFilter: "blur(10px)", borderBottom: `1px solid ${LIGHT.border}` }}>
+      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "15px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="tap" onClick={() => onNavigate("home")} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 17, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.3 }}>
+          <span style={{ width: 26, height: 26, borderRadius: 8, background: LIGHT.accent, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 15, fontWeight: 800 }}>S</span>
+          Sable
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 26 }}>
+          <span className="tap" onClick={() => onNavigate("home")} style={{ ...link, color: screen === "home" ? LIGHT.ink : LIGHT.sub }}>Home</span>
+          <span className="tap" onClick={() => onNavigate("pricing")} style={{ ...link, color: screen === "pricing" ? LIGHT.ink : LIGHT.sub }}>Pricing</span>
+          {session ? (
+            <>
+              <span className="tap" onClick={onGoDashboard} style={{ background: LIGHT.ink, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 16px", borderRadius: 9 }}>Go to Dashboard</span>
+              <span className="tap" onClick={onLogout} style={link}>Log Out</span>
+            </>
+          ) : (
+            <>
+              <span className="tap" onClick={() => onNavigate("login")} style={{ ...link, fontWeight: 600, color: LIGHT.ink }}>Log In</span>
+              <span className="tap" onClick={() => onNavigate("signup-choice")} style={{ background: LIGHT.ink, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 16px", borderRadius: 9 }}>Get Started</span>
+            </>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function PublicFooter({ onNavigate }) {
+  return (
+    <footer style={{ background: LIGHT.ink, color: "#A6A29A", padding: "34px 0" }}>
+      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 24px", display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "space-between", fontSize: 12.5 }}>
+        <div style={{ color: "#F5F4ED", fontWeight: 700 }}>Sable</div>
+        <div style={{ display: "flex", gap: 18 }}>
+          <span className="tap" onClick={() => onNavigate("home")}>Home</span>
+          <span className="tap" onClick={() => onNavigate("pricing")}>Pricing</span>
+        </div>
+        <div>© {new Date().getFullYear()} Sable · runsable.com</div>
+      </div>
+    </footer>
+  );
+}
+
+function HomePage({ onNavigate }) {
+  const services = [
+    { icon: <PhoneIncoming size={20} />, title: "Never miss a call", body: "An AI receptionist answers every call, day or night, and books the job while you're still on the ladder." },
+    { icon: <KanbanSquare size={20} />, title: "Dispatch that runs itself", body: "Jobs land on a live board, get assigned to the right tech, and track from booked to done." },
+    { icon: <Radar size={20} />, title: "See your whole crew", body: "Live status on every technician — who's en route, who's on site, who's free — on one map." },
+  ];
+  const steps = [
+    { n: "01", h: "A call comes in", p: "Sable picks up in your company's voice, understands the problem, and quotes a real price range." },
+    { n: "02", h: "The job books itself", p: "A new lead and job appear in your dashboard automatically — even if the caller hangs up first." },
+    { n: "03", h: "Your tech shows up", p: "The right technician is dispatched with the address, quote, and customer history already attached." },
+  ];
+  return (
+    <>
+      {/* Hero */}
+      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "80px 24px 56px", display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: 48, alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: LIGHT.accent, marginBottom: 16 }}>AI receptionist + dispatch</div>
+          <h1 style={{ fontSize: 44, lineHeight: 1.08, fontWeight: 800, color: LIGHT.ink, letterSpacing: -1, margin: "0 0 18px" }}>The phone stops ringing out. The jobs stop slipping through.</h1>
+          <p style={{ fontSize: 16.5, lineHeight: 1.6, color: LIGHT.sub, maxWidth: 480, margin: "0 0 28px" }}>Sable answers every call, books the work, and dispatches your crew — so a missed call never again means a missed job.</p>
+          <div style={{ display: "flex", gap: 12 }}>
+            <span className="tap" onClick={() => onNavigate("signup-choice")} style={{ background: LIGHT.ink, color: "#fff", fontSize: 15, fontWeight: 600, padding: "13px 24px", borderRadius: 11 }}>Start free trial</span>
+            <span className="tap" onClick={() => onNavigate("pricing")} style={{ background: LIGHT.card, color: LIGHT.ink, border: `1px solid ${LIGHT.border}`, fontSize: 15, fontWeight: 600, padding: "13px 24px", borderRadius: 11 }}>See pricing</span>
+          </div>
+        </div>
+        <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, boxShadow: "0 20px 60px rgba(31,30,29,0.12)", border: `1px solid ${LIGHT.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <span style={{ width: 38, height: 38, borderRadius: 11, background: LIGHT.successSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><PhoneIncoming size={18} color={LIGHT.success} /></span>
+            <div><div style={{ fontSize: 13.5, fontWeight: 700, color: LIGHT.ink }}>Incoming call · answered</div><div style={{ fontSize: 12, color: LIGHT.sub }}>Sarah Chen · 412 17 Ave SE</div></div>
+          </div>
+          {[["Problem", "Kitchen pipe leak, water pooling"], ["Quote given", "$415 – $495"], ["Booked", "Today, 2:38 PM · Dave M."], ["Lead stage", "New Lead → Booked"]].map(([k, v]) => (
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: `1px solid ${LIGHT.border}`, fontSize: 13 }}>
+              <span style={{ color: LIGHT.sub }}>{k}</span><span style={{ color: LIGHT.ink, fontWeight: 600 }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Trust strip */}
+      <div style={{ background: LIGHT.card, borderTop: `1px solid ${LIGHT.border}`, borderBottom: `1px solid ${LIGHT.border}` }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 24px", display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "space-between" }}>
+          {[["100%", "of calls answered"], ["<18 min", "average response"], ["24/7", "always on"], ["6 stages", "lead pipeline"]].map(([n, l]) => (
+            <div key={l} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: 17, fontWeight: 800, color: LIGHT.ink }}>{n}</span>
+              <span style={{ fontSize: 13, color: LIGHT.sub }}>{l}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Services */}
+      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px" }}>
+        <h2 style={{ fontSize: 30, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.6, margin: "0 0 8px" }}>Everything after the phone rings.</h2>
+        <p style={{ fontSize: 15, color: LIGHT.sub, margin: "0 0 40px" }}>One system from the first ring to the paid invoice.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+          {services.map((s) => (
+            <div key={s.title} style={{ background: LIGHT.card, borderRadius: 16, padding: 26, border: `1px solid ${LIGHT.border}` }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: LIGHT.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", color: LIGHT.accent, marginBottom: 16 }}>{s.icon}</div>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink, margin: "0 0 8px" }}>{s.title}</h3>
+              <p style={{ fontSize: 13.5, lineHeight: 1.55, color: LIGHT.sub, margin: 0 }}>{s.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section style={{ background: LIGHT.ink, color: "#fff" }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: LIGHT.accent, marginBottom: 12 }}>How it works</div>
+          <h2 style={{ fontSize: 30, fontWeight: 800, letterSpacing: -0.6, margin: "0 0 40px", color: "#F5F4ED" }}>Three steps, no waiting on hold.</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 30 }}>
+            {steps.map((s) => (
+              <div key={s.n}>
+                <div style={{ height: 1, background: "rgba(245,244,237,0.16)", marginBottom: 18 }} />
+                <div style={{ fontSize: 13, fontWeight: 700, color: LIGHT.accent, marginBottom: 12 }}>{s.n}</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 10px", color: "#F5F4ED" }}>{s.h}</h3>
+                <p style={{ fontSize: 14, lineHeight: 1.6, color: "#A6A29A", margin: 0 }}>{s.p}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px", textAlign: "center" }}>
+        <h2 style={{ fontSize: 30, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.6, margin: "0 0 14px" }}>Stop losing jobs to voicemail.</h2>
+        <p style={{ fontSize: 15.5, color: LIGHT.sub, maxWidth: 460, margin: "0 auto 26px" }}>Start a free trial and hear Sable answer your next call.</p>
+        <span className="tap" onClick={() => onNavigate("signup-choice")} style={{ display: "inline-block", background: LIGHT.ink, color: "#fff", fontSize: 15, fontWeight: 600, padding: "14px 30px", borderRadius: 11 }}>Start free trial</span>
+      </section>
+    </>
+  );
+}
+
+function PricingPage({ onNavigate }) {
+  const tiers = [
+    { key: "starter", tagline: "For solo operators just getting off voicemail.", features: ["AI receptionist, 24/7", "Up to 1 technician", "Live dispatch board", "Automatic lead capture"] },
+    { key: "growth", tagline: "For growing crews that need the whole pipeline.", features: ["Everything in Starter", "Up to 8 technicians", "Full CRM + automations", "SMS + email workflows", "A/B tested call scripts"], popular: true },
+    { key: "pro", tagline: "For multi-location shops running a fleet.", features: ["Everything in Growth", "Unlimited technicians", "Multiple locations", "Priority support", "Custom integrations"] },
+  ];
+  return (
+    <section style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px" }}>
+      <div style={{ textAlign: "center", marginBottom: 44 }}>
+        <h1 style={{ fontSize: 38, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.8, margin: "0 0 12px" }}>One price, priced by crew size.</h1>
+        <p style={{ fontSize: 15.5, color: LIGHT.sub, margin: 0 }}>Every plan includes the AI receptionist. 7-day free trial, no card required.</p>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, alignItems: "start" }}>
+        {tiers.map((t) => {
+          const plan = PLANS[t.key];
+          return (
+            <div key={t.key} style={{ background: LIGHT.card, borderRadius: 18, padding: 28, border: `1.5px solid ${t.popular ? LIGHT.accent : LIGHT.border}`, position: "relative", boxShadow: t.popular ? "0 16px 44px rgba(218,119,86,0.16)" : "none" }}>
+              {t.popular && <div style={{ position: "absolute", top: -11, left: 28, background: LIGHT.accent, color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 20 }}>Most popular</div>}
+              <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>{plan.name}</div>
+              <div style={{ margin: "12px 0 6px" }}><span style={{ fontSize: 36, fontWeight: 800, color: LIGHT.ink, letterSpacing: -1 }}>${plan.price}</span><span style={{ fontSize: 14, color: LIGHT.sub }}> /mo</span></div>
+              <p style={{ fontSize: 13, color: LIGHT.sub, lineHeight: 1.5, margin: "0 0 20px", minHeight: 38 }}>{t.tagline}</p>
+              <span className="tap" onClick={() => onNavigate("signup-choice")} style={{ display: "block", textAlign: "center", background: t.popular ? LIGHT.ink : LIGHT.card, color: t.popular ? "#fff" : LIGHT.ink, border: t.popular ? "none" : `1px solid ${LIGHT.border}`, fontSize: 14, fontWeight: 600, padding: "12px 0", borderRadius: 10, marginBottom: 22 }}>Start free trial</span>
+              {t.features.map((f) => (
+                <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 13.5, color: LIGHT.ink, marginBottom: 11 }}>
+                  <CheckCircle2 size={16} color={LIGHT.success} style={{ flexShrink: 0, marginTop: 1 }} /> {f}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function PublicSite({ screen, session, onNavigate, onGoDashboard, onLogout }) {
+  return (
+    <div style={{ minHeight: "100vh", background: LIGHT.bg, display: "flex", flexDirection: "column" }}>
+      <GlobalStyle />
+      <PublicNav screen={screen} session={session} onNavigate={onNavigate} onGoDashboard={onGoDashboard} onLogout={onLogout} />
+      <div style={{ flex: 1 }}>
+        {screen === "pricing" ? <PricingPage onNavigate={onNavigate} /> : <HomePage onNavigate={onNavigate} />}
+      </div>
+      <PublicFooter onNavigate={onNavigate} />
+    </div>
   );
 }
 
@@ -211,9 +428,10 @@ function AuthShell({ children, maxWidth = 380 }) {
 function BackRow({ onBack }) {
   return <div className="tap" onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, color: LIGHT.sub, fontSize: 13, fontWeight: 600, marginBottom: 20 }}><ArrowLeft size={15} /> Back</div>;
 }
-function LoginScreen({ onLogin, onSignup }) {
+function LoginScreen({ onLogin, onSignup, onBack }) {
   return (
     <AuthShell>
+      {onBack && <BackRow onBack={onBack} />}
       <div style={{ textAlign: "center", marginBottom: 32 }}>
         <div style={{ width: 56, height: 56, borderRadius: 16, background: LIGHT.accent, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#fff", fontSize: 22 }}>M</div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: LIGHT.ink, margin: "0 0 4px 0" }}>Welcome to Sable</h1>
@@ -335,7 +553,7 @@ function TextInput({ value, onChange, placeholder, type = "text" }) {
 
 /* ---------------- APP SHELL ---------------- */
 
-function AppShell({ session, businessProfile, onLogout, team, jobs, companyCode, onRegenerateCode, onAssignJob, onAdvanceJob, onRemoveTeamMember, onUpdateJobNotes, onSetTheme }) {
+function AppShell({ session, businessProfile, onLogout, onGoHome, team, jobs, companyCode, onRegenerateCode, onAssignJob, onAdvanceJob, onRemoveTeamMember, onUpdateJobNotes, onSetTheme }) {
   const [tab, setTab] = useState("home");
   const [plansOpen, setPlansOpen] = useState(false);
   const unassignedCount = jobs.filter((j) => j.status === "unassigned").length;
@@ -356,7 +574,7 @@ function AppShell({ session, businessProfile, onLogout, team, jobs, companyCode,
     <div style={{ minHeight: "100%", background: C.bg, paddingBottom: 76 }}>
       <GlobalStyle />
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px" }}>
-        <TopBar session={session} businessProfile={businessProfile} onLogout={onLogout} onOpenPlans={() => setPlansOpen(true)} unassignedCount={unassignedCount} onBell={() => session.role === "owner" && setTab("jobs")} />
+        <TopBar session={session} businessProfile={businessProfile} onLogout={onLogout} onGoHome={onGoHome} onOpenPlans={() => setPlansOpen(true)} unassignedCount={unassignedCount} onBell={() => session.role === "owner" && setTab("jobs")} />
 
         {tab === "home" && session.role === "owner" && <OwnerHome jobs={jobs} team={team} businessProfile={businessProfile} />}
         {tab === "home" && session.role === "tech" && <TechHome jobs={jobs.filter((j) => j.techId === session.id && j.date === "2026-07-13")} onAdvanceJob={onAdvanceJob} onUpdateJobNotes={onUpdateJobNotes} session={session} />}
@@ -375,7 +593,7 @@ function AppShell({ session, businessProfile, onLogout, team, jobs, companyCode,
   );
 }
 
-function TopBar({ session, businessProfile, onLogout, onOpenPlans, unassignedCount, onBell }) {
+function TopBar({ session, businessProfile, onLogout, onGoHome, onOpenPlans, unassignedCount, onBell }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
@@ -403,6 +621,7 @@ function TopBar({ session, businessProfile, onLogout, onOpenPlans, unassignedCou
         <div style={{ position: "absolute", top: 44, left: 0, background: C.card, borderRadius: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.2)", width: 220, padding: 6, zIndex: 20 }}>
           <MenuItem icon={SettingsIcon} label="Settings" />
           <MenuItem icon={CreditCard} label="Billing & Plan" onClick={() => { setMenuOpen(false); onOpenPlans(); }} />
+          {onGoHome && <MenuItem icon={Home} label="Back to homepage" onClick={() => { setMenuOpen(false); onGoHome(); }} />}
           <div style={{ height: 1, background: C.border, margin: "6px 4px" }} />
           <MenuItem icon={LogOut} label="Log Out" onClick={onLogout} />
         </div>
