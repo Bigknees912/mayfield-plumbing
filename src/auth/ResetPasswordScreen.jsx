@@ -7,13 +7,15 @@ import { AuthShell, FieldLabel, TextInput, PrimaryButton, ErrorText, LIGHT, useP
 // of the normal session/profile flow - regardless of whether a profile
 // exists yet, since a recovery-link click always produces a session but
 // the user hasn't "really" signed in until they set a new password.
+const MIN_PASSWORD_LENGTH = 8
+
 export default function ResetPasswordScreen({ onDone }) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const { loading, error, run, setError } = usePendingAction()
 
   function submit() {
-    if (password.length < 6) return setError('Password must be at least 6 characters.')
+    if (password.length < MIN_PASSWORD_LENGTH) return setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
     if (password !== confirm) return setError("Passwords don't match.")
     run(async () => {
       await updatePassword(password)
@@ -31,7 +33,7 @@ export default function ResetPasswordScreen({ onDone }) {
       </div>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
         <FieldLabel>New password</FieldLabel>
-        <TextInput value={password} onChange={setPassword} placeholder="At least 6 characters" type="password" autoComplete="new-password" />
+        <TextInput value={password} onChange={setPassword} placeholder="At least 8 characters" type="password" autoComplete="new-password" />
         <FieldLabel>Confirm new password</FieldLabel>
         <TextInput value={confirm} onChange={setConfirm} placeholder="Re-enter password" type="password" autoComplete="new-password" />
         <ErrorText>{error}</ErrorText>
