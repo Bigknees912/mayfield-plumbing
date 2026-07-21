@@ -106,12 +106,96 @@ function GlobalStyle() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
       * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; }
-      .tap { cursor: pointer; transition: opacity 0.12s ease, transform 0.12s ease; }
-      .tap:active { transform: scale(0.98); }
+
+      /* Buttons/clickables: real hover + pressed states, not just color. */
+      .tap { cursor: pointer; transition: opacity 0.16s cubic-bezier(0.22,1,0.36,1), transform 0.16s cubic-bezier(0.22,1,0.36,1), box-shadow 0.16s ease, background 0.16s ease; }
+      .tap:hover { opacity: 0.9; }
+      .tap:active { transform: scale(0.97); }
+
       input::placeholder { color: #AEAEB2; }
       input, select { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; }
+
+      /* State-change icons (checkmarks, badges, bell, lock): gentle
+         scale-and-fade in when their state flips, instead of snapping. */
+      @keyframes statePop { 0% { opacity: 0; transform: scale(0.5); } 60% { transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
+      .state-pop { animation: statePop 0.26s cubic-bezier(0.22,1,0.36,1); }
+
+      /* Tab/page content: brief fade+slide on switch, not a hard cut. */
+      @keyframes tabIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      .tab-panel { animation: tabIn 0.28s cubic-bezier(0.22,1,0.36,1); }
+
+      /* Toasts / confirmations: slide in and out. */
+      @keyframes toastIn { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      @keyframes toastOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(10px) scale(0.97); } }
+      .toast-in { animation: toastIn 0.24s cubic-bezier(0.22,1,0.36,1); }
+      .toast-out { animation: toastOut 0.22s cubic-bezier(0.4,0,1,1) forwards; }
+
+      /* Skeleton loaders: shimmer instead of blank space. */
+      @keyframes shimmer { 0% { background-position: -320px 0; } 100% { background-position: 320px 0; } }
+      .skeleton { background: linear-gradient(90deg, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.09) 37%, rgba(0,0,0,0.05) 63%); background-size: 640px 100%; animation: shimmer 1.3s linear infinite; border-radius: 8px; }
+
+      /* Inline mount reveal for cards/rows. */
+      @keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .rise-in { animation: riseIn 0.32s cubic-bezier(0.22,1,0.36,1) both; }
+
+      /* Hero panel: pulsing ring on the active step + typing cursor. */
+      @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(218,119,86,0.45); } 70% { box-shadow: 0 0 0 8px rgba(218,119,86,0); } 100% { box-shadow: 0 0 0 0 rgba(218,119,86,0); } }
+      .pulse-ring { animation: pulseRing 1.6s cubic-bezier(0.22,1,0.36,1) infinite; }
+      @keyframes blinkCursor { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+      .type-cursor { display: inline-block; width: 2px; height: 1em; background: currentColor; margin-left: 1px; vertical-align: text-bottom; animation: blinkCursor 0.9s steps(1) infinite; }
+      @keyframes typingDot { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-3px); opacity: 1; } }
+
+      /* Floating hero blobs. */
+      @keyframes floatBlobA { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(46px,38px) scale(1.08); } }
+      @keyframes floatBlobB { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-38px,-28px) scale(0.94); } }
+      .blob-a { animation: floatBlobA 24s cubic-bezier(0.22,1,0.36,1) infinite; }
+      .blob-b { animation: floatBlobB 28s cubic-bezier(0.22,1,0.36,1) infinite; }
+
+      /* The one non-negotiable: honor reduced-motion everywhere. */
+      @media (prefers-reduced-motion: reduce) {
+        *, .tap, .state-pop, .tab-panel, .toast-in, .toast-out, .skeleton, .rise-in, .blob-a, .blob-b {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+        .tap:active { transform: none; }
+      }
     `}</style>
   );
+}
+
+// Shimmer skeleton block for loading states. Width/height/radius override
+// the default via style.
+function Skeleton({ w = "100%", h = 14, r = 8, style }) {
+  return <div className="skeleton" style={{ width: w, height: h, borderRadius: r, ...style }} />;
+}
+
+// Toast that slides in, holds, then slides out before unmounting. Rendered
+// via useToast() below so any screen can fire one without wiring its own
+// timers/exit animation.
+function Toast({ label, icon: Icon, tone = "success", leaving }) {
+  const toneColor = tone === "success" ? "#3D7A5C" : tone === "info" ? "#5B7A8C" : C.ink;
+  return (
+    <div style={{ position: "fixed", left: 0, right: 0, bottom: 92, display: "flex", justifyContent: "center", zIndex: 200, pointerEvents: "none" }}>
+      <div className={leaving ? "toast-out" : "toast-in"} style={{ display: "flex", alignItems: "center", gap: 9, background: C.ink, color: "#fff", borderRadius: 12, padding: "11px 18px", fontSize: 13.5, fontWeight: 600, boxShadow: "0 12px 32px rgba(0,0,0,0.28)" }}>
+        {Icon && <Icon size={16} color="#fff" style={{ opacity: 0.9 }} />}
+        <span>{label}</span>
+        <span style={{ width: 7, height: 7, borderRadius: 4, background: toneColor, marginLeft: 2 }} />
+      </div>
+    </div>
+  );
+}
+
+// Fires a toast that auto-dismisses with a slide-out. Returns [toastEl, fire].
+function useToast() {
+  const [toast, setToast] = useState(null); // { label, icon, tone, leaving }
+  function fire(label, opts = {}) {
+    setToast({ label, icon: opts.icon, tone: opts.tone || "success", leaving: false });
+    setTimeout(() => setToast((t) => (t ? { ...t, leaving: true } : t)), 1500);
+    setTimeout(() => setToast(null), 1740);
+  }
+  const el = toast ? <Toast {...toast} /> : null;
+  return [el, fire];
 }
 function GoogleG({ size = 18 }) {
   return (
@@ -121,6 +205,35 @@ function GoogleG({ size = 18 }) {
       <path fill="#FBBC05" d="M11.8 28.3c-.4-1.3-.7-2.7-.7-4.3s.3-3 .7-4.3v-5.6H4.5C3 17.1 2.2 20.4 2.2 24s.8 6.9 2.3 9.9l7-5.6z"/>
       <path fill="#EA4335" d="M24 10.7c3.3 0 6.2 1.1 8.5 3.3l6.3-6.3C34.9 4.2 30 2 24 2 15.4 2 8.1 7 4.5 14.1l7 5.6c1.7-5.2 6.5-9 12.5-9z"/>
     </svg>
+  );
+}
+
+// Sable logo mark: a voice waveform inside a rounded terracotta square —
+// on-brand for an AI phone receptionist ("it's always listening / always
+// answering"). Pure SVG so it stays crisp at any size and needs no asset.
+function LogoMark({ size = 36, radius }) {
+  const r = radius != null ? radius : Math.round(size * 0.3);
+  // Symmetric waveform bars, tallest in the middle.
+  const bars = [
+    { x: 9, h: 8 }, { x: 14, h: 15 }, { x: 19, h: 22 }, { x: 24, h: 15 }, { x: 29, h: 8 },
+  ];
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
+      <rect width="40" height="40" rx={r * 40 / size} fill="#DA7756" />
+      {bars.map((b, i) => (
+        <rect key={i} x={b.x} y={20 - b.h / 2} width="2.6" height={b.h} rx="1.3" fill="#fff" opacity={i === 2 ? 1 : 0.9} />
+      ))}
+    </svg>
+  );
+}
+
+// Full lockup: mark + "Sable" wordmark. Size scales both together.
+function LogoLockup({ size = 34, color }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: size * 0.3 }}>
+      <LogoMark size={size} />
+      <span style={{ fontSize: size * 0.72, fontWeight: 800, letterSpacing: -0.6, color: color || LIGHT.ink }}>Sable</span>
+    </span>
   );
 }
 
@@ -236,9 +349,8 @@ function PublicNav({ screen, session, onNavigate, onGoDashboard, onLogout }) {
   return (
     <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(245,244,237,0.86)", backdropFilter: "blur(10px)", borderBottom: `1px solid ${LIGHT.border}` }}>
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "15px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div className="tap" onClick={() => onNavigate("home")} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 17, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.3 }}>
-          <span style={{ width: 26, height: 26, borderRadius: 8, background: LIGHT.accent, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 15, fontWeight: 800 }}>S</span>
-          Sable
+        <div className="tap" onClick={() => onNavigate("home")}>
+          <LogoLockup size={38} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 26 }}>
           <span className="tap" onClick={() => onNavigate("home")} style={{ ...link, color: screen === "home" ? LIGHT.ink : LIGHT.sub }}>Home</span>
@@ -264,8 +376,8 @@ function PublicFooter({ onNavigate }) {
   return (
     <footer style={{ background: LIGHT.ink, color: "#A6A29A", padding: "34px 0" }}>
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 24px", display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "space-between", fontSize: 12.5 }}>
-        <div style={{ color: "#F5F4ED", fontWeight: 700 }}>Sable</div>
-        <div style={{ display: "flex", gap: 18 }}>
+        <LogoLockup size={26} color="#F5F4ED" />
+        <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
           <span className="tap" onClick={() => onNavigate("home")}>Home</span>
           <span className="tap" onClick={() => onNavigate("pricing")}>Pricing</span>
         </div>
@@ -275,93 +387,340 @@ function PublicFooter({ onNavigate }) {
   );
 }
 
+// The full 7-step hero animation from the reference spec (call → AI quote →
+// lead → booked → confirmed → dispatched → review), rendered in this site's
+// warm palette instead of the reference's navy/copper so it reads as one
+// system with the rest of the product. Driven entirely by React state +
+// effects, no animation library. Honors reduced-motion by holding on a
+// completed state with no looping.
+const HERO_STEPS = [
+  { key: "call", label: "Call comes in", head: "Incoming call" },
+  { key: "quote", label: "AI answers & quotes", head: "Instant quote sent" },
+  { key: "lead", label: "Lead captured", head: "New lead created" },
+  { key: "book", label: "Qualified & booked", head: "Booked for today" },
+  { key: "confirm", label: "Confirmed & reminded", head: "Confirmation sent" },
+  { key: "dispatch", label: "Technician dispatched", head: "Dave is on the way" },
+  { key: "review", label: "Review requested", head: "Review request sent" },
+];
+const HERO_TRANSCRIPT = "Hi, my basement's flooding, I need someone today.";
+
+function HeroTracker({ step }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
+      {HERO_STEPS.map((s, i) => {
+        const done = i < step, active = i === step;
+        return (
+          <React.Fragment key={s.key}>
+            <div
+              className={active ? "pulse-ring" : ""}
+              style={{
+                width: 22, height: 22, borderRadius: 11, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: done || active ? LIGHT.accent : LIGHT.card,
+                border: `1.5px solid ${done || active ? LIGHT.accent : LIGHT.border}`,
+                transition: "background 0.3s cubic-bezier(0.22,1,0.36,1), border-color 0.3s ease",
+              }}
+            >
+              {done ? <CheckCircle2 size={13} color="#fff" /> : <span style={{ width: 6, height: 6, borderRadius: 3, background: active ? "#fff" : LIGHT.border }} />}
+            </div>
+            {i < HERO_STEPS.length - 1 && (
+              <div style={{ flex: 1, height: 2, background: i < step ? LIGHT.accent : LIGHT.border, transition: "background 0.4s cubic-bezier(0.22,1,0.36,1)" }} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
+      {[0, 1, 2].map((i) => <span key={i} style={{ width: 5, height: 5, borderRadius: 3, background: LIGHT.sub, display: "inline-block", animation: `typingDot 1.2s ${i * 0.16}s infinite` }} />)}
+    </span>
+  );
+}
+
+function SmsBubble({ children }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+      <div style={{ background: LIGHT.accent, color: "#fff", fontSize: 13, lineHeight: 1.5, padding: "9px 13px", borderRadius: "14px 14px 4px 14px", maxWidth: "85%" }}>{children}</div>
+    </div>
+  );
+}
+
+function HeroStepBody({ stepKey, typed }) {
+  const box = { background: LIGHT.bg, borderRadius: 12, padding: 14 };
+  if (stepKey === "call") {
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <span style={{ width: 34, height: 34, borderRadius: 17, background: LIGHT.successSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><PhoneIncoming size={16} color={LIGHT.success} /></span>
+          <div><div style={{ fontSize: 13, fontWeight: 700, color: LIGHT.ink }}>Sarah Chen</div><div style={{ fontSize: 11.5, color: LIGHT.sub }}>(403) 555-0119</div></div>
+        </div>
+        <div style={{ ...box, fontSize: 13, color: LIGHT.ink, lineHeight: 1.5, minHeight: 54 }}>
+          "{typed}<span className="type-cursor" />"
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 11.5, color: LIGHT.accent, fontWeight: 600 }}>
+          <span className="pulse-ring" style={{ width: 7, height: 7, borderRadius: 4, background: LIGHT.accent, display: "inline-block" }} /> AI answering
+        </div>
+      </div>
+    );
+  }
+  if (stepKey === "quote") {
+    return (
+      <div>
+        <span style={{ display: "inline-block", background: LIGHT.card, border: `1px solid ${LIGHT.border}`, fontSize: 11, color: LIGHT.sub, padding: "3px 10px", borderRadius: 20, marginBottom: 10 }}>Sarah Chen · just now</span>
+        <div style={{ marginBottom: 10 }}><TypingDots /></div>
+        <div style={{ background: LIGHT.accent, color: "#fff", fontSize: 13, lineHeight: 1.5, padding: "10px 13px", borderRadius: "14px 14px 14px 4px", maxWidth: "90%" }}>
+          For a basement flood we're looking at <strong>$415–$495</strong>. I can get a tech to you <strong>today at 2:15pm</strong> — want me to book it?
+        </div>
+      </div>
+    );
+  }
+  if (stepKey === "lead") {
+    return (
+      <div style={box}>
+        <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: LIGHT.accent, marginBottom: 10 }}>NEW LEAD</div>
+        {[["Name", "Sarah Chen"], ["Job", "Basement flood / water damage"], ["Address", "412 17 Ave SE"], ["Estimate", "$415 – $495"]].map(([k, v]) => (
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 0" }}><span style={{ color: LIGHT.sub }}>{k}</span><span style={{ color: LIGHT.ink, fontWeight: 600 }}>{v}</span></div>
+        ))}
+      </div>
+    );
+  }
+  if (stepKey === "book") {
+    const slots = ["8:00 AM", "9:00 AM", "1:00 PM", "2:15 PM"];
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {slots.map((t) => {
+          const booked = t === "2:15 PM";
+          return (
+            <div key={t} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 13px", borderRadius: 10, background: booked ? LIGHT.accent : LIGHT.bg, border: `1px solid ${booked ? LIGHT.accent : LIGHT.border}` }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: booked ? "#fff" : LIGHT.ink }}>{t}</span>
+              {booked && <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.9)" }}>Basement flood · Sarah C.</span>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  if (stepKey === "confirm") {
+    return (
+      <div>
+        <SmsBubble>You're booked for today at <strong>2:15pm</strong>. Reply STOP to cancel.</SmsBubble>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: LIGHT.success, fontWeight: 600, marginTop: 6 }}><CheckCircle2 size={14} /> Reminder scheduled</div>
+      </div>
+    );
+  }
+  if (stepKey === "dispatch") {
+    return (
+      <div>
+        <SmsBubble>Dave is on the way, arriving <strong>2:15pm</strong>.</SmsBubble>
+        <div style={{ ...box, padding: 0, overflow: "hidden" }}>
+          <svg viewBox="0 0 260 90" style={{ width: "100%", display: "block", background: "#EDEBE4" }}>
+            <path d="M20 70 Q 90 20 150 45 T 240 25" fill="none" stroke={LIGHT.accent} strokeWidth="2.5" strokeDasharray="4 4" />
+            <circle cx="20" cy="70" r="4" fill={LIGHT.sub} />
+            <circle cx="240" cy="25" r="5" fill={LIGHT.accent} />
+            <circle cx="150" cy="45" r="6" fill="#fff" stroke={LIGHT.accent} strokeWidth="2.5" />
+          </svg>
+          <div style={{ padding: "8px 12px", fontSize: 11.5, color: LIGHT.sub }}>Dave M. · 6 min away</div>
+        </div>
+      </div>
+    );
+  }
+  // review
+  return (
+    <div>
+      <SmsBubble>Thanks for choosing Sable! Mind leaving us a review?</SmsBubble>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+        <span style={{ display: "flex", gap: 1 }}>{[0,1,2,3,4].map((i) => <Star key={i} size={13} color={LIGHT.gold || "#E0A94E"} fill={LIGHT.gold || "#E0A94E"} />)}</span>
+        <span style={{ fontSize: 11.5, color: LIGHT.accent, fontWeight: 600 }}>g.page/sable-review</span>
+      </div>
+    </div>
+  );
+}
+
+function HeroPanel() {
+  const reduce = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const [step, setStep] = useState(reduce ? 3 : 0);
+  const [typed, setTyped] = useState(reduce ? HERO_TRANSCRIPT : "");
+
+  // Advance through the 7 steps on a loop.
+  React.useEffect(() => {
+    if (reduce) return;
+    const id = setInterval(() => setStep((s) => (s + 1) % HERO_STEPS.length), 2600);
+    return () => clearInterval(id);
+  }, [reduce]);
+
+  // Type out the transcript whenever step 0 (re)starts.
+  React.useEffect(() => {
+    if (reduce || step !== 0) { if (step !== 0) setTyped(""); return; }
+    setTyped("");
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setTyped(HERO_TRANSCRIPT.slice(0, i));
+      if (i >= HERO_TRANSCRIPT.length) clearInterval(id);
+    }, 42);
+    return () => clearInterval(id);
+  }, [step, reduce]);
+
+  const cur = HERO_STEPS[step];
+  return (
+    <div style={{ position: "relative", background: "#fff", borderRadius: 22, padding: 22, boxShadow: "0 30px 70px -28px rgba(31,30,29,0.32), 0 6px 20px rgba(31,30,29,0.07)", border: "1px solid #ECEAE5" }}>
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 20 }}>
+        <span style={{ width: 40, height: 40, borderRadius: 12, background: LIGHT.ink, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 17 }}>A</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: LIGHT.ink }}>Apex Plumbing</div>
+          <div style={{ fontSize: 11.5, color: LIGHT.sub }}>AI Receptionist</div>
+        </div>
+        <div style={{ fontSize: 11.5, color: LIGHT.success, display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: LIGHT.success, display: "inline-block" }} /> Live
+        </div>
+      </div>
+
+      <HeroTracker step={step} />
+
+      {/* step card — re-keyed so content re-animates in as the row advances */}
+      <div style={{ overflow: "hidden" }}>
+        <div key={cur.key} className="rise-in" style={{ background: LIGHT.card, border: `1px solid ${LIGHT.border}`, borderRadius: 14, padding: 16, minHeight: 176 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: LIGHT.sub }}>STEP {step + 1}</span>
+            <CheckCircle2 size={16} color={LIGHT.success} />
+          </div>
+          <div style={{ fontSize: 16.5, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.3, marginBottom: 14 }}>{cur.head}</div>
+          <HeroStepBody stepKey={cur.key} typed={typed} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeroBlobs() {
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
+      <div className="blob-a" style={{ position: "absolute", width: 460, height: 460, top: -150, left: -120, borderRadius: "50%", background: `radial-gradient(circle, ${LIGHT.accent} 0%, transparent 70%)`, opacity: 0.28, filter: "blur(70px)" }} />
+      <div className="blob-b" style={{ position: "absolute", width: 380, height: 380, top: 40, right: -120, borderRadius: "50%", background: "radial-gradient(circle, #E0A94E 0%, transparent 70%)", opacity: 0.22, filter: "blur(70px)" }} />
+    </div>
+  );
+}
+
 function HomePage({ onNavigate }) {
-  const services = [
-    { icon: <PhoneIncoming size={20} />, title: "Never miss a call", body: "An AI receptionist answers every call, day or night, and books the job while you're still on the ladder." },
-    { icon: <KanbanSquare size={20} />, title: "Dispatch that runs itself", body: "Jobs land on a live board, get assigned to the right tech, and track from booked to done." },
-    { icon: <Radar size={20} />, title: "See your whole crew", body: "Live status on every technician — who's en route, who's on site, who's free — on one map." },
+  const features = [
+    { icon: PhoneIncoming, title: "An AI that actually answers", body: "It picks up in your company's voice, understands the problem, and quotes a real price — 24/7, no hold music, no voicemail." },
+    { icon: KanbanSquare, title: "Dispatch that runs itself", body: "Every call becomes a job on a live board, assigned to the right tech and tracked from booked to done." },
+    { icon: BookUser, title: "A CRM that never forgets a lead", body: "Even a caller who hangs up becomes a contact in your pipeline — so follow-up is automatic, not a sticky note." },
+    { icon: Radar, title: "Your whole crew on one map", body: "See who's en route, who's on site, and who's free, in real time, without texting each tech one by one." },
   ];
   const steps = [
-    { n: "01", h: "A call comes in", p: "Sable picks up in your company's voice, understands the problem, and quotes a real price range." },
-    { n: "02", h: "The job books itself", p: "A new lead and job appear in your dashboard automatically — even if the caller hangs up first." },
-    { n: "03", h: "Your tech shows up", p: "The right technician is dispatched with the address, quote, and customer history already attached." },
+    { n: "01", h: "The phone rings", p: "Sable answers instantly in your brand's voice and figures out what the customer actually needs." },
+    { n: "02", h: "The job books itself", p: "A quote goes out, a lead is created, and the work lands on your dispatch board automatically." },
+    { n: "03", h: "Your tech shows up", p: "The right person is dispatched with the address, quote, and full customer history already attached." },
+  ];
+  const testimonials = [
+    { q: "We stopped paying an after-hours answering service and book more jobs than we did with a human doing it.", who: "Marcus D.", role: "Owner · 6-truck plumbing shop" },
+    { q: "It caught a $4,000 water-heater job at 11pm that would've gone to voicemail. Paid for itself the first week.", who: "Renée T.", role: "Dispatch lead · HVAC" },
+    { q: "Setup took an afternoon. Now every missed call is a lead in the pipeline instead of a lost customer.", who: "Sam K.", role: "Electrician · solo operator" },
   ];
   return (
     <>
       {/* Hero */}
-      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "80px 24px 56px", display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: 48, alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: LIGHT.accent, marginBottom: 16 }}>AI receptionist + dispatch</div>
-          <h1 style={{ fontSize: 44, lineHeight: 1.08, fontWeight: 800, color: LIGHT.ink, letterSpacing: -1, margin: "0 0 18px" }}>The phone stops ringing out. The jobs stop slipping through.</h1>
-          <p style={{ fontSize: 16.5, lineHeight: 1.6, color: LIGHT.sub, maxWidth: 480, margin: "0 0 28px" }}>Sable answers every call, books the work, and dispatches your crew — so a missed call never again means a missed job.</p>
-          <div style={{ display: "flex", gap: 12 }}>
-            <span className="tap" onClick={() => onNavigate("signup-choice")} style={{ background: LIGHT.ink, color: "#fff", fontSize: 15, fontWeight: 600, padding: "13px 24px", borderRadius: 11 }}>Start free trial</span>
-            <span className="tap" onClick={() => onNavigate("pricing")} style={{ background: LIGHT.card, color: LIGHT.ink, border: `1px solid ${LIGHT.border}`, fontSize: 15, fontWeight: 600, padding: "13px 24px", borderRadius: 11 }}>See pricing</span>
-          </div>
-        </div>
-        <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, boxShadow: "0 20px 60px rgba(31,30,29,0.12)", border: `1px solid ${LIGHT.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <span style={{ width: 38, height: 38, borderRadius: 11, background: LIGHT.successSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><PhoneIncoming size={18} color={LIGHT.success} /></span>
-            <div><div style={{ fontSize: 13.5, fontWeight: 700, color: LIGHT.ink }}>Incoming call · answered</div><div style={{ fontSize: 12, color: LIGHT.sub }}>Sarah Chen · 412 17 Ave SE</div></div>
-          </div>
-          {[["Problem", "Kitchen pipe leak, water pooling"], ["Quote given", "$415 – $495"], ["Booked", "Today, 2:38 PM · Dave M."], ["Lead stage", "New Lead → Booked"]].map(([k, v]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: `1px solid ${LIGHT.border}`, fontSize: 13 }}>
-              <span style={{ color: LIGHT.sub }}>{k}</span><span style={{ color: LIGHT.ink, fontWeight: 600 }}>{v}</span>
+      <section style={{ position: "relative", overflow: "hidden" }}>
+        <HeroBlobs />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 1080, margin: "0 auto", padding: "88px 24px 64px", display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: 52, alignItems: "center" }}>
+          <div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: LIGHT.card, border: `1px solid ${LIGHT.border}`, borderRadius: 20, padding: "5px 13px", fontSize: 12.5, fontWeight: 600, color: LIGHT.sub, marginBottom: 22 }}>
+              <Sparkles size={13} color={LIGHT.accent} /> AI receptionist + dispatch for trades
             </div>
-          ))}
+            <h1 style={{ fontSize: "clamp(38px, 5.4vw, 60px)", lineHeight: 1.04, fontWeight: 800, color: LIGHT.ink, letterSpacing: -1.6, margin: "0 0 20px" }}>Bring AI into your business.</h1>
+            <p style={{ fontSize: 17.5, lineHeight: 1.6, color: LIGHT.sub, maxWidth: 470, margin: "0 0 30px" }}>Sable answers every call, books the work, and dispatches your crew — so the phone never rings out and a missed call never means a missed job.</p>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <span className="tap" onClick={() => onNavigate("signup-choice")} style={{ background: LIGHT.ink, color: "#fff", fontSize: 15, fontWeight: 600, padding: "14px 26px", borderRadius: 12 }}>Start free trial</span>
+              <span className="tap" onClick={() => onNavigate("pricing")} style={{ background: LIGHT.card, color: LIGHT.ink, border: `1px solid ${LIGHT.border}`, fontSize: 15, fontWeight: 600, padding: "14px 26px", borderRadius: 12 }}>See pricing</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: LIGHT.sub, marginTop: 18 }}>7-day free trial · no card required · set up in an afternoon</div>
+          </div>
+          <HeroPanel />
         </div>
       </section>
 
       {/* Trust strip */}
       <div style={{ background: LIGHT.card, borderTop: `1px solid ${LIGHT.border}`, borderBottom: `1px solid ${LIGHT.border}` }}>
-        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 24px", display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "space-between" }}>
-          {[["100%", "of calls answered"], ["<18 min", "average response"], ["24/7", "always on"], ["6 stages", "lead pipeline"]].map(([n, l]) => (
+        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "22px 24px", display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "space-between" }}>
+          {[["100%", "of calls answered"], ["<18 min", "average response"], ["24/7", "always on"], ["38 sec", "call to booked"]].map(([n, l]) => (
             <div key={l} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontSize: 17, fontWeight: 800, color: LIGHT.ink }}>{n}</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.5 }}>{n}</span>
               <span style={{ fontSize: 13, color: LIGHT.sub }}>{l}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Services */}
-      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px" }}>
-        <h2 style={{ fontSize: 30, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.6, margin: "0 0 8px" }}>Everything after the phone rings.</h2>
-        <p style={{ fontSize: 15, color: LIGHT.sub, margin: "0 0 40px" }}>One system from the first ring to the paid invoice.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
-          {services.map((s) => (
-            <div key={s.title} style={{ background: LIGHT.card, borderRadius: 16, padding: 26, border: `1px solid ${LIGHT.border}` }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: LIGHT.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", color: LIGHT.accent, marginBottom: 16 }}>{s.icon}</div>
-              <h3 style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink, margin: "0 0 8px" }}>{s.title}</h3>
-              <p style={{ fontSize: 13.5, lineHeight: 1.55, color: LIGHT.sub, margin: 0 }}>{s.body}</p>
-            </div>
-          ))}
+      {/* Big statement band */}
+      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "84px 24px 40px" }}>
+        <h2 style={{ fontSize: "clamp(28px, 3.6vw, 40px)", fontWeight: 800, color: LIGHT.ink, letterSpacing: -1, lineHeight: 1.12, maxWidth: 760, margin: 0 }}>
+          The best tech in town still loses to the shop that <span style={{ color: LIGHT.accent }}>picks up the phone</span>.
+        </h2>
+        <p style={{ fontSize: 16, lineHeight: 1.6, color: LIGHT.sub, maxWidth: 560, margin: "20px 0 0" }}>Sable makes sure that shop is always yours — answering, quoting, and booking while you're under a sink or on a roof.</p>
+      </section>
+
+      {/* Features — asymmetric 2x2, not an identical 3-card row */}
+      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "24px 24px 84px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {features.map((f, i) => {
+            const Icon = f.icon;
+            return (
+              <div key={f.title} style={{ background: LIGHT.card, borderRadius: 18, padding: 28, border: `1px solid ${LIGHT.border}` }}>
+                <div style={{ width: 46, height: 46, borderRadius: 13, background: LIGHT.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", color: LIGHT.accent, marginBottom: 18 }}><Icon size={21} /></div>
+                <h3 style={{ fontSize: 18.5, fontWeight: 700, color: LIGHT.ink, letterSpacing: -0.3, margin: "0 0 9px" }}>{f.title}</h3>
+                <p style={{ fontSize: 14, lineHeight: 1.6, color: LIGHT.sub, margin: 0 }}>{f.body}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      {/* How it works */}
+      {/* How it works — dark band, real sequence so numbers are earned */}
       <section style={{ background: LIGHT.ink, color: "#fff" }}>
-        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px" }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: LIGHT.accent, marginBottom: 12 }}>How it works</div>
-          <h2 style={{ fontSize: 30, fontWeight: 800, letterSpacing: -0.6, margin: "0 0 40px", color: "#F5F4ED" }}>Three steps, no waiting on hold.</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 30 }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "84px 24px" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: LIGHT.accent, marginBottom: 14 }}>How it works</div>
+          <h2 style={{ fontSize: "clamp(28px, 3.4vw, 38px)", fontWeight: 800, letterSpacing: -0.9, margin: "0 0 46px", color: "#F5F4ED" }}>From ring to booked in under a minute.</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 34 }}>
             {steps.map((s) => (
               <div key={s.n}>
-                <div style={{ height: 1, background: "rgba(245,244,237,0.16)", marginBottom: 18 }} />
-                <div style={{ fontSize: 13, fontWeight: 700, color: LIGHT.accent, marginBottom: 12 }}>{s.n}</div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 10px", color: "#F5F4ED" }}>{s.h}</h3>
-                <p style={{ fontSize: 14, lineHeight: 1.6, color: "#A6A29A", margin: 0 }}>{s.p}</p>
+                <div style={{ height: 1, background: "rgba(245,244,237,0.16)", marginBottom: 20 }} />
+                <div style={{ fontSize: 13, fontWeight: 700, color: LIGHT.accent, marginBottom: 14 }}>{s.n}</div>
+                <h3 style={{ fontSize: 19, fontWeight: 700, margin: "0 0 11px", color: "#F5F4ED" }}>{s.h}</h3>
+                <p style={{ fontSize: 14, lineHeight: 1.65, color: "#A6A29A", margin: 0 }}>{s.p}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "72px 24px", textAlign: "center" }}>
-        <h2 style={{ fontSize: 30, fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.6, margin: "0 0 14px" }}>Stop losing jobs to voicemail.</h2>
-        <p style={{ fontSize: 15.5, color: LIGHT.sub, maxWidth: 460, margin: "0 auto 26px" }}>Start a free trial and hear Sable answer your next call.</p>
-        <span className="tap" onClick={() => onNavigate("signup-choice")} style={{ display: "inline-block", background: LIGHT.ink, color: "#fff", fontSize: 15, fontWeight: 600, padding: "14px 30px", borderRadius: 11 }}>Start free trial</span>
+      {/* Testimonials */}
+      <section style={{ maxWidth: 1080, margin: "0 auto", padding: "84px 24px" }}>
+        <h2 style={{ fontSize: "clamp(26px, 3.2vw, 34px)", fontWeight: 800, color: LIGHT.ink, letterSpacing: -0.8, margin: "0 0 40px" }}>Trades that stopped losing calls.</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+          {testimonials.map((t) => (
+            <div key={t.who} style={{ background: LIGHT.card, borderRadius: 18, padding: 26, border: `1px solid ${LIGHT.border}`, display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", gap: 2, marginBottom: 14 }}>{[0,1,2,3,4].map((i) => <Star key={i} size={14} color={LIGHT.gold || "#E0A94E"} fill={LIGHT.gold || "#E0A94E"} />)}</div>
+              <p style={{ fontSize: 14.5, lineHeight: 1.6, color: LIGHT.ink, margin: "0 0 18px", flex: 1 }}>"{t.q}"</p>
+              <div style={{ fontSize: 13, fontWeight: 700, color: LIGHT.ink }}>{t.who}</div>
+              <div style={{ fontSize: 12, color: LIGHT.sub }}>{t.role}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section style={{ position: "relative", overflow: "hidden", background: LIGHT.accent }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "76px 24px", textAlign: "center", position: "relative", zIndex: 1 }}>
+          <h2 style={{ fontSize: "clamp(28px, 3.6vw, 40px)", fontWeight: 800, color: "#fff", letterSpacing: -0.9, margin: "0 0 14px" }}>Hear Sable answer your next call.</h2>
+          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.9)", maxWidth: 480, margin: "0 auto 28px", lineHeight: 1.6 }}>Start a free trial today. Set it up in an afternoon and never lose a call to voicemail again.</p>
+          <span className="tap" onClick={() => onNavigate("signup-choice")} style={{ display: "inline-block", background: "#fff", color: LIGHT.ink, fontSize: 15.5, fontWeight: 700, padding: "15px 34px", borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.16)" }}>Start free trial</span>
+        </div>
       </section>
     </>
   );
@@ -433,7 +792,7 @@ function LoginScreen({ onLogin, onSignup, onBack }) {
     <AuthShell>
       {onBack && <BackRow onBack={onBack} />}
       <div style={{ textAlign: "center", marginBottom: 32 }}>
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: LIGHT.accent, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#fff", fontSize: 22 }}>M</div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}><LogoMark size={56} /></div>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: LIGHT.ink, margin: "0 0 4px 0" }}>Welcome to Sable</h1>
         <div style={{ fontSize: 14, color: LIGHT.sub }}>Sign in to your dashboard</div>
       </div>
@@ -553,9 +912,43 @@ function TextInput({ value, onChange, placeholder, type = "text" }) {
 
 /* ---------------- APP SHELL ---------------- */
 
+// First-load placeholder: mirrors the shape of the owner home (two stat
+// rows + a list) so the layout doesn't jump when real content arrives.
+function DashboardSkeleton() {
+  return (
+    <div>
+      <Skeleton w={180} h={22} style={{ marginBottom: 18 }} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{ background: C.card, borderRadius: 16, padding: 18, border: `1px solid ${C.border}` }}>
+            <Skeleton w={34} h={34} r={10} style={{ marginBottom: 14 }} />
+            <Skeleton w={54} h={24} style={{ marginBottom: 8 }} />
+            <Skeleton w="70%" h={11} />
+          </div>
+        ))}
+      </div>
+      <Skeleton w={120} h={12} style={{ margin: "20px 0 12px" }} />
+      {[0, 1, 2].map((i) => (
+        <div key={i} style={{ background: C.card, borderRadius: 14, padding: 16, border: `1px solid ${C.border}`, marginBottom: 10, display: "flex", gap: 12, alignItems: "center" }}>
+          <Skeleton w={38} h={38} r={10} />
+          <div style={{ flex: 1 }}><Skeleton w="55%" h={13} style={{ marginBottom: 8 }} /><Skeleton w="35%" h={11} /></div>
+          <Skeleton w={60} h={22} r={11} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AppShell({ session, businessProfile, onLogout, onGoHome, team, jobs, companyCode, onRegenerateCode, onAssignJob, onAdvanceJob, onRemoveTeamMember, onUpdateJobNotes, onSetTheme }) {
   const [tab, setTab] = useState("home");
   const [plansOpen, setPlansOpen] = useState(false);
+  // Simulates the first-load fetch a real Supabase-backed build does: show
+  // skeletons briefly instead of a blank frame, then reveal the dashboard.
+  const [loading, setLoading] = useState(true);
+  React.useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 550);
+    return () => clearTimeout(t);
+  }, []);
   const unassignedCount = jobs.filter((j) => j.status === "unassigned").length;
 
   const ownerTabs = [
@@ -576,16 +969,24 @@ function AppShell({ session, businessProfile, onLogout, onGoHome, team, jobs, co
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px" }}>
         <TopBar session={session} businessProfile={businessProfile} onLogout={onLogout} onGoHome={onGoHome} onOpenPlans={() => setPlansOpen(true)} unassignedCount={unassignedCount} onBell={() => session.role === "owner" && setTab("jobs")} />
 
-        {tab === "home" && session.role === "owner" && <OwnerHome jobs={jobs} team={team} businessProfile={businessProfile} />}
-        {tab === "home" && session.role === "tech" && <TechHome jobs={jobs.filter((j) => j.techId === session.id && j.date === "2026-07-13")} onAdvanceJob={onAdvanceJob} onUpdateJobNotes={onUpdateJobNotes} session={session} />}
-        {tab === "jobs" && session.role === "owner" && <JobsBoard jobs={jobs} team={team} onAssignJob={onAssignJob} />}
-        {tab === "map" && session.role === "owner" && <MapPage team={team} jobs={jobs} />}
-        {tab === "calendar" && <CalendarPage jobs={jobs} team={team} myTechId={session.role === "tech" ? session.id : null} />}
-        {tab === "directory" && session.role === "tech" && <TeamDirectory team={team} session={session} />}
-        {tab === "clients" && session.role === "owner" && <ClientsPage jobs={jobs} />}
-        {tab === "analytics" && session.role === "owner" && <AnalyticsPage jobs={jobs} />}
-        {tab === "team" && session.role === "owner" && <TeamPage team={team} jobs={jobs} companyCode={companyCode} onRegenerateCode={onRegenerateCode} onRemove={onRemoveTeamMember} />}
-        {tab === "settings" && <SettingsPage session={session} businessProfile={businessProfile} onSetTheme={onSetTheme} />}
+        {loading ? (
+          <DashboardSkeleton />
+        ) : (
+          /* key={tab} remounts the panel on every tab switch so the tabIn
+             fade+slide replays instead of a hard cut. */
+          <div key={tab} className="tab-panel">
+            {tab === "home" && session.role === "owner" && <OwnerHome jobs={jobs} team={team} businessProfile={businessProfile} />}
+            {tab === "home" && session.role === "tech" && <TechHome jobs={jobs.filter((j) => j.techId === session.id && j.date === "2026-07-13")} onAdvanceJob={onAdvanceJob} onUpdateJobNotes={onUpdateJobNotes} session={session} />}
+            {tab === "jobs" && session.role === "owner" && <JobsBoard jobs={jobs} team={team} onAssignJob={onAssignJob} />}
+            {tab === "map" && session.role === "owner" && <MapPage team={team} jobs={jobs} />}
+            {tab === "calendar" && <CalendarPage jobs={jobs} team={team} myTechId={session.role === "tech" ? session.id : null} />}
+            {tab === "directory" && session.role === "tech" && <TeamDirectory team={team} session={session} />}
+            {tab === "clients" && session.role === "owner" && <ClientsPage jobs={jobs} />}
+            {tab === "analytics" && session.role === "owner" && <AnalyticsPage jobs={jobs} />}
+            {tab === "team" && session.role === "owner" && <TeamPage team={team} jobs={jobs} companyCode={companyCode} onRegenerateCode={onRegenerateCode} onRemove={onRemoveTeamMember} />}
+            {tab === "settings" && <SettingsPage session={session} businessProfile={businessProfile} onSetTheme={onSetTheme} />}
+          </div>
+        )}
       </div>
       <BottomNav tabs={tabs} active={tab} onChange={setTab} />
       {plansOpen && <PlanModal currentPlan={session.plan} onClose={() => setPlansOpen(false)} />}
@@ -612,7 +1013,7 @@ function TopBar({ session, businessProfile, onLogout, onGoHome, onOpenPlans, una
         {session.role === "owner" && (
           <div className="tap" onClick={onBell} style={{ position: "relative", width: 36, height: 36, borderRadius: 18, background: C.card, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
             <Bell size={16} color={C.ink} />
-            {unassignedCount > 0 && <div style={{ position: "absolute", top: -3, right: -3, background: C.alert, color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 8, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{unassignedCount}</div>}
+            {unassignedCount > 0 && <div key={unassignedCount} className="state-pop" style={{ position: "absolute", top: -3, right: -3, background: C.alert, color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 8, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{unassignedCount}</div>}
           </div>
         )}
         <div style={{ width: 36, height: 36, borderRadius: 18, background: C.accent, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 }}>{session.initials}</div>
@@ -1136,18 +1537,18 @@ function AnalyticsPage({ jobs }) {
 /* ---------------- OWNER: TEAM ---------------- */
 
 function TeamPage({ team, jobs, companyCode, onRegenerateCode, onRemove }) {
-  const [copied, setCopied] = useState(false);
+  const [toast, fireToast] = useToast();
   return (
     <>
+      {toast}
       <SectionLabel>Join Code</SectionLabel>
       <div style={{ background: C.card, borderRadius: 16, padding: 18, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", marginBottom: 20 }}>
         <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 10 }}>Share this with employees. They enter it when creating their account.</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: C.ink, background: C.bg, borderRadius: 10, padding: "10px 12px", letterSpacing: 1 }}>{companyCode}</div>
-          <div className="tap" onClick={() => { navigator.clipboard && navigator.clipboard.writeText(companyCode); setCopied(true); setTimeout(() => setCopied(false), 1500); }} style={{ width: 40, height: 40, borderRadius: 10, background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><Copy size={16} color={C.ink} /></div>
-          <div className="tap" onClick={onRegenerateCode} style={{ width: 40, height: 40, borderRadius: 10, background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><RefreshCw size={16} color={C.ink} /></div>
+          <div className="tap" onClick={() => { navigator.clipboard && navigator.clipboard.writeText(companyCode); fireToast("Copied to clipboard", { icon: Copy }); }} style={{ width: 40, height: 40, borderRadius: 10, background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><Copy size={16} color={C.ink} /></div>
+          <div className="tap" onClick={() => { onRegenerateCode(); fireToast("New join code generated", { icon: RefreshCw, tone: "info" }); }} style={{ width: 40, height: 40, borderRadius: 10, background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><RefreshCw size={16} color={C.ink} /></div>
         </div>
-        {copied && <div style={{ fontSize: 11.5, color: C.success, marginTop: 6 }}>Copied</div>}
       </div>
       <SectionLabel>Team ({team.length})</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1190,8 +1591,8 @@ function TechHome({ jobs, onAdvanceJob, onUpdateJobNotes, session }) {
   return (
     <>
       <div style={{ background: C.card, borderRadius: 16, padding: 14, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: clockedIn ? C.successSoft : C.border, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Clock size={16} color={clockedIn ? C.success : C.sub} />
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: clockedIn ? C.successSoft : C.border, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.2s ease" }}>
+          <Clock key={clockedIn ? "on" : "off"} className="state-pop" size={16} color={clockedIn ? C.success : C.sub} />
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{clockedIn ? "On shift" : "Off shift"}</div>
@@ -1240,16 +1641,19 @@ function TechHome({ jobs, onAdvanceJob, onUpdateJobNotes, session }) {
 function JobDetailModal({ job, onClose, onSaveNotes }) {
   const [notes, setNotes] = useState(job.notes || "");
   const [saved, setSaved] = useState(false);
+  const [toast, fireToast] = useToast();
   const U = URGENCY_STYLE()[job.urgency];
 
   function save() {
     onSaveNotes(notes);
     setSaved(true);
+    fireToast("Notes saved", { icon: CheckCircle2 });
     setTimeout(() => setSaved(false), 1500);
   }
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 60 }} onClick={onClose}>
+      {toast}
       <div style={{ background: C.card, borderRadius: "20px 20px 0 0", padding: 22, width: "100%", maxWidth: 480, maxHeight: "88vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
           <div>
@@ -1282,8 +1686,8 @@ function JobDetailModal({ job, onClose, onSaveNotes }) {
           rows={4}
           style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 13, padding: 12, color: C.ink, marginBottom: 10, resize: "none" }}
         />
-        <div className="tap" onClick={save} style={{ textAlign: "center", background: C.ink, color: C.bg, borderRadius: 10, padding: "11px 0", fontSize: 13, fontWeight: 600 }}>
-          {saved ? "Saved" : "Save Notes"}
+        <div className="tap" onClick={save} style={{ textAlign: "center", background: saved ? C.success : C.ink, color: "#fff", borderRadius: 10, padding: "11px 0", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.2s ease" }}>
+          {saved ? <><CheckCircle2 key="ck" size={15} className="state-pop" /> Saved</> : "Save Notes"}
         </div>
       </div>
     </div>
