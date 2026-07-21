@@ -201,7 +201,7 @@ function SuspendedScreen({ onSignOut }) {
       <div style={{ paddingTop: 40, textAlign: 'center' }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: LIGHT.ink, marginBottom: 10 }}>Account access paused</div>
         <div style={{ fontSize: 13.5, color: LIGHT.sub, marginBottom: 24, lineHeight: 1.5 }}>
-          Your workspace's access has been paused by Mayfield support. Your data is safe and nothing has been
+          Your workspace's access has been paused by Sable support. Your data is safe and nothing has been
           deleted - reach out to support to get this resolved.
         </div>
         <button

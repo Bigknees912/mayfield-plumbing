@@ -39,7 +39,7 @@ export default function AdminShell({ session, onSignOut }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
           <div>
             <div style={{ fontSize: 11.5, fontWeight: 700, color: LIGHT.sub, textTransform: 'uppercase', letterSpacing: 0.6 }}>
-              Mayfield Platform
+              Sable Platform
             </div>
             <div style={{ fontSize: 19, fontWeight: 700, color: LIGHT.ink }}>Super Admin</div>
           </div>

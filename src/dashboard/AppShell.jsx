@@ -128,7 +128,7 @@ export default function AppShell({ session, profile, onSignOut }) {
               <TradeIcon size={17} color={LIGHT.accent} />
             </div>
             <div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink }}>{company?.name || 'Mayfield'}</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink }}>{company?.name || 'Sable'}</div>
               <div style={{ fontSize: 12, color: LIGHT.sub }}>{profile.name} · {ROLE_LABEL[profile.role] || 'Technician'}</div>
             </div>
           </div>

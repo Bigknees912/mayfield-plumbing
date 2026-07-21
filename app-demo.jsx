@@ -41,7 +41,7 @@ const STATUS_META = () => ({
 
 function money(n) { return n.toLocaleString("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }); }
 function initialsOf(name) { return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(); }
-function randomCode() { return "MAYFIELD-" + Math.random().toString(36).slice(2, 6).toUpperCase(); }
+function randomCode() { return "SABLE-" + Math.random().toString(36).slice(2, 6).toUpperCase(); }
 // Stable mock distance so the same tech/job pairing always shows the same
 // "km away" in this demo. A real build replaces this with each tech's live
 // GPS position compared against the job address.
@@ -53,8 +53,8 @@ function mockDistanceKm(techId, jobId) {
 }
 
 const INITIAL_TEAM = [
-  { id: "u1", name: "Dave Martinez", email: "dave@mayfieldplumbing.ca", phone: "(403) 555-0119", initials: "DM" },
-  { id: "u2", name: "Priya Kapoor", email: "priya@mayfieldplumbing.ca", phone: "(403) 555-0284", initials: "PK" },
+  { id: "u1", name: "Dave Martinez", email: "dave@sableplumbing.ca", phone: "(403) 555-0119", initials: "DM" },
+  { id: "u2", name: "Priya Kapoor", email: "priya@sableplumbing.ca", phone: "(403) 555-0284", initials: "PK" },
 ];
 const INITIAL_JOBS = [
   { id: "j1", date: "2026-07-13", time: "6:47 AM", job: "Pipe Repair / Leak", address: "412 17 Ave SE", customer: "Sarah Chen", customerPhone: "(403) 555-0119", urgency: "emergency", low: 415, high: 495, status: "in_progress", techId: "u1", mapX: 62, mapY: 58, notes: "" },
@@ -126,7 +126,7 @@ function GoogleG({ size = 18 }) {
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [companyCode, setCompanyCode] = useState("MAYFIELD-4K2P");
+  const [companyCode, setCompanyCode] = useState("SABLE-4K2P");
   const [team, setTeam] = useState(INITIAL_TEAM);
   const [jobs, setJobs] = useState(INITIAL_JOBS);
   const [screen, setScreen] = useState("login");
@@ -216,7 +216,7 @@ function LoginScreen({ onLogin, onSignup }) {
     <AuthShell>
       <div style={{ textAlign: "center", marginBottom: 32 }}>
         <div style={{ width: 56, height: 56, borderRadius: 16, background: LIGHT.accent, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#fff", fontSize: 22 }}>M</div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: LIGHT.ink, margin: "0 0 4px 0" }}>Welcome to Mayfield</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: LIGHT.ink, margin: "0 0 4px 0" }}>Welcome to Sable</h1>
         <div style={{ fontSize: 14, color: LIGHT.sub }}>Sign in to your dashboard</div>
       </div>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 24, boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)" }}>
@@ -257,7 +257,7 @@ function OwnerSignup({ onBack, onCreate }) {
       <BackRow onBack={onBack} />
       <h1 style={{ fontSize: 20, fontWeight: 700, color: LIGHT.ink, marginBottom: 20 }}>Set up your business</h1>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-        <FieldLabel>Business name</FieldLabel><TextInput value={biz} onChange={setBiz} placeholder="Mayfield Plumbing & Drain" />
+        <FieldLabel>Business name</FieldLabel><TextInput value={biz} onChange={setBiz} placeholder="Sable Plumbing & Drain" />
         <FieldLabel>Your name</FieldLabel><TextInput value={name} onChange={setName} placeholder="Jordan Reyes" />
         <FieldLabel>Email</FieldLabel><TextInput placeholder="you@company.com" />
         <FieldLabel>Password</FieldLabel><TextInput type="password" placeholder="••••••••" />
@@ -281,11 +281,11 @@ function EmployeeSignup({ onBack, onCreate }) {
         <FieldLabel>Your name</FieldLabel><TextInput value={name} onChange={setName} placeholder="Dave Martinez" />
         <FieldLabel>Email</FieldLabel><TextInput placeholder="you@email.com" />
         <FieldLabel>Password</FieldLabel><TextInput type="password" placeholder="••••••••" />
-        <FieldLabel>Company join code</FieldLabel><TextInput value={code} onChange={setCode} placeholder="MAYFIELD-4K2P" />
+        <FieldLabel>Company join code</FieldLabel><TextInput value={code} onChange={setCode} placeholder="SABLE-4K2P" />
         {error && <div style={{ color: LIGHT.alert, fontSize: 12.5, marginBottom: 10 }}>{error}</div>}
         <div className="tap" onClick={submit} style={{ textAlign: "center", background: LIGHT.ink, color: "#fff", borderRadius: 10, padding: "12px 0", fontSize: 14, fontWeight: 600, marginTop: 6 }}>Join Company</div>
       </div>
-      <div style={{ fontSize: 12, color: LIGHT.sub, marginTop: 14, textAlign: "center" }}>Try demo code: <strong style={{ color: LIGHT.ink }}>MAYFIELD-4K2P</strong></div>
+      <div style={{ fontSize: 12, color: LIGHT.sub, marginTop: 14, textAlign: "center" }}>Try demo code: <strong style={{ color: LIGHT.ink }}>SABLE-4K2P</strong></div>
     </AuthShell>
   );
 }
@@ -384,7 +384,7 @@ function TopBar({ session, businessProfile, onLogout, onOpenPlans, unassignedCou
           <MoreVertical size={18} color={C.ink} />
         </div>
         <div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: C.ink }}>Mayfield {businessProfile?.trade || "Plumbing"}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: C.ink }}>Sable {businessProfile?.trade || "Plumbing"}</div>
           <div className="tap" onClick={onOpenPlans} style={{ fontSize: 12, color: C.accent, fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
             {PLANS[session.plan].name} Plan <ChevronRight size={12} />
           </div>
@@ -1193,7 +1193,7 @@ function OnTheWayPreview({ job, onClose }) {
         <div style={{ background: C.bg, borderRadius: 14, padding: 14 }}>
           <div style={{ display: "inline-block", maxWidth: "88%", background: C.info, color: "#fff", borderRadius: "16px 16px 16px 4px", overflow: "hidden" }}>
             <div style={{ padding: "10px 12px 8px 12px", fontSize: 13, lineHeight: 1.4 }}>
-              Hi {job.customer.split(" ")[0]}, Dave from Mayfield Plumbing is on the way. ETA 18 min.
+              Hi {job.customer.split(" ")[0]}, Dave from Sable Plumbing is on the way. ETA 18 min.
             </div>
             {/* Rich link preview card, this is what a plain Google Maps link auto-renders as in iMessage/Android Messages */}
             <div style={{ background: "rgba(255,255,255,0.12)", margin: "0 8px 8px 8px", borderRadius: 10, overflow: "hidden" }}>
@@ -1259,7 +1259,7 @@ function SettingsPage({ session, businessProfile, onSetTheme }) {
       <div style={{ background: C.card, borderRadius: 16, padding: 4, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", marginBottom: 20 }}>
         <div style={{ padding: "12px 14px" }}>
           <FieldLabelDark>Name</FieldLabelDark><TextInputDark defaultValue={session.name} />
-          <FieldLabelDark>Email</FieldLabelDark><TextInputDark defaultValue="owner@mayfieldplumbing.ca" />
+          <FieldLabelDark>Email</FieldLabelDark><TextInputDark defaultValue="owner@sableplumbing.ca" />
         </div>
       </div>
 
@@ -1303,7 +1303,7 @@ function SettingsPage({ session, businessProfile, onSetTheme }) {
       )}
 
       <SectionLabel>About</SectionLabel>
-      <div style={{ background: C.card, borderRadius: 16, padding: 16, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", fontSize: 12.5, color: C.sub }}>Mayfield AI Receptionist · Demo Build</div>
+      <div style={{ background: C.card, borderRadius: 16, padding: 16, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", fontSize: 12.5, color: C.sub }}>Sable AI Receptionist · Demo Build</div>
     </>
   );
 }

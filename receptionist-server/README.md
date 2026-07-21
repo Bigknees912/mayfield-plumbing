@@ -1,4 +1,4 @@
-# Mayfield AI Receptionist — Real Phone Deployment
+# Sable AI Receptionist — Real Phone Deployment
 
 This is the actual server that answers real phone calls once wired up. It
 ports the pricing and scheduling logic from the chat demo into three tools
@@ -70,7 +70,7 @@ laptop right now and Vapi can't reach `localhost`. Easiest free options:
 
 1. Push this folder to a GitHub repo (or drag-and-drop deploy where supported).
 2. Set the start command to `npm start`.
-3. Once deployed, you'll get a URL like `https://mayfield-receptionist.onrender.com`.
+3. Once deployed, you'll get a URL like `https://sable-receptionist.onrender.com`.
 
 To test locally first instead, install the Vapi CLI and tunnel your machine:
 

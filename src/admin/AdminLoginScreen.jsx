@@ -51,12 +51,12 @@ export default function AdminLoginScreen() {
   return (
     <AuthShell>
       <div style={{ fontSize: 11.5, fontWeight: 700, color: LIGHT.sub, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
-        Mayfield Platform
+        Sable Platform
       </div>
       <h1 style={{ fontSize: 20, fontWeight: 700, color: LIGHT.ink, marginBottom: 20 }}>Super Admin Sign In</h1>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
         <FieldLabel>Email</FieldLabel>
-        <TextInput value={email} onChange={setEmail} placeholder="you@mayfield.com" type="email" autoComplete="username" />
+        <TextInput value={email} onChange={setEmail} placeholder="you@sable.com" type="email" autoComplete="username" />
         <FieldLabel>Password</FieldLabel>
         <TextInput value={password} onChange={setPassword} placeholder="••••••••" type="password" autoComplete="current-password" />
         <ErrorText>{error}</ErrorText>

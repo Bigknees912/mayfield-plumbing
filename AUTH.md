@@ -863,10 +863,10 @@ changes. Update the content in those files (and the placeholder contact
 emails/phone number) before publishing.
 
 **Important scoping note**: `marketing-site.html` is a single plumbing
-company's own public-facing website (the fictional "Mayfield Plumbing &
+company's own public-facing website (the fictional "Sable Plumbing &
 Drain" reference tenant), not the SaaS platform's own marketing site — so
 these Terms/Privacy Policy govern that company's relationship with the
-*homeowners* who call them for service, not Mayfield-the-software's
+*homeowners* who call them for service, not Sable-the-software's
 relationship with the plumbing businesses that use it. That's a
 deliberate reading of the existing file's content (hero copy, lead form,
 "Licensed & Insured, Alberta" footer) — a future per-tenant site generator
@@ -911,7 +911,7 @@ a raw anon RLS insert policy.
   A `SELECT` policy (`company_id = current_company_id() and
   "current_role"() = 'owner'`) exists for that future view even though
   no page reads it yet.
-- **Who actually handles these today**: there's no Mayfield-platform
+- **Who actually handles these today**: there's no Sable-platform
   admin panel in this app (every other table is scoped to a single
   tenant; this one deliberately isn't, since a request may not even name
   the right company). Today, requests are triaged by whoever holds
@@ -1147,7 +1147,7 @@ a workflow artifact with 90-day retention.
 
 **To restore from one of these dumps**:
 1. Go to the workflow run in the **Actions** tab → download the
-   `mayfield-db-backup-<run-id>` artifact → unzip it to get the
+   `sable-db-backup-<run-id>` artifact → unzip it to get the
    `.dump` file.
 2. **Strongly recommended: restore into a brand-new, empty Supabase
    project first** to verify the dump is good before touching anything
@@ -1156,7 +1156,7 @@ a workflow artifact with 90-day retention.
    ```sh
    pg_restore --clean --if-exists --no-owner --no-privileges \
      -d "<new-project-connection-string>" \
-     mayfield-2026-07-16.dump
+     sable-2026-07-16.dump
    ```
 3. Once verified, restoring into the *real* project the same way is
    destructive to whatever's currently there (`--clean` drops existing
@@ -1639,7 +1639,7 @@ company - see its README):
 
 **Marketing site**: `marketing-site.html` is now a template with
 `{{TOKEN}}` placeholders (company name, location, hero copy, services
-grid, testimonials, footer) instead of hardcoded Mayfield/Calgary/plumbing
+grid, testimonials, footer) instead of hardcoded Sable/Calgary/plumbing
 content. `scripts/generate-marketing-site.js` (root-level, same resale
 model as `generate-assistant.js` - one deployed site per company) fetches
 a company's name/trade/service_area/active job types via the service role

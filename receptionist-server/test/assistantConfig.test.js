@@ -32,7 +32,7 @@ test("buildAssistantConfig: an electrician's config never mentions plumbing term
 
 test("buildAssistantConfig: a plumber's config never mentions electrical terms", () => {
   const config = buildAssistantConfig({
-    company: { name: "Mayfield Plumbing & Drain", trade: "Plumbing", service_area: "Calgary" },
+    company: { name: "Sable Plumbing & Drain", trade: "Plumbing", service_area: "Calgary" },
     jobTypes: PLUMBING_JOB_TYPES,
     webhookUrl: "https://example.com/vapi/webhook",
   });

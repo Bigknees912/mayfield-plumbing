@@ -17,7 +17,7 @@ export default function LoginScreen({ onSignup, onForgotPassword }) {
     <AuthShell>
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <div style={{ width: 56, height: 56, borderRadius: 16, background: LIGHT.accent, margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#fff', fontSize: 22 }}>M</div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: LIGHT.ink, margin: '0 0 4px 0' }}>Welcome to Mayfield</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: LIGHT.ink, margin: '0 0 4px 0' }}>Welcome to Sable</h1>
         <div style={{ fontSize: 14, color: LIGHT.sub }}>Sign in to your dashboard</div>
       </div>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 24, boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)' }}>

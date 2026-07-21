@@ -63,7 +63,7 @@
 <div class="wrap">
   <div class="grid">
     <div>
-      <div class="eyebrow">MAYFIELD PLUMBING &amp; DRAIN — VOICE CALL SIMULATOR</div>
+      <div class="eyebrow">SABLE PLUMBING &amp; DRAIN — VOICE CALL SIMULATOR</div>
       <h1>Talk to Alex, For Real</h1>
       <div class="phone">
         <div class="phone-header">
@@ -232,7 +232,7 @@
   }
 
   function buildSystemPrompt() {
-    let base = `You are Alex, the AI phone receptionist for Mayfield Plumbing & Drain, a plumbing company in Calgary, Alberta. You are on a live phone call with a customer.
+    let base = `You are Alex, the AI phone receptionist for Sable Plumbing & Drain, a plumbing company in Calgary, Alberta. You are on a live phone call with a customer.
 
 This is a real phone call, not a chat. Nobody stays on the line for a paragraph. Follow these rules strictly:
 - One short sentence per turn. Two only if absolutely necessary.
@@ -376,7 +376,7 @@ Only include non-null values you're confident about. Never overwrite a known fie
   // Opening greeting
   setTimeout(() => speakAndShowGreeting(), 300);
   function speakAndShowGreeting() {
-    const greeting = "Mayfield Plumbing, this is Alex. What's going on?";
+    const greeting = "Sable Plumbing, this is Alex. What's going on?";
     addBubble("Alex", greeting);
     speak(greeting);
   }

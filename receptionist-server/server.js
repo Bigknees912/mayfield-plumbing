@@ -214,5 +214,5 @@ Sentry.setupExpressErrorHandler(app);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Mayfield receptionist webhook listening on port ${PORT}`);
+  console.log(`Sable receptionist webhook listening on port ${PORT}`);
 });

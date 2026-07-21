@@ -48,7 +48,7 @@ export default function OwnerOnboardingScreen({ plan, onBack, onDone }) {
 
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', marginBottom: 4 }}>
         <FieldLabel>Business name</FieldLabel>
-        <TextInput value={businessName} onChange={setBusinessName} placeholder="Mayfield Plumbing & Drain" />
+        <TextInput value={businessName} onChange={setBusinessName} placeholder="Sable Plumbing & Drain" />
         <FieldLabel>Your name</FieldLabel>
         <TextInput value={ownerName} onChange={setOwnerName} placeholder="Jordan Reyes" />
 
