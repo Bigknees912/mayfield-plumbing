@@ -17,6 +17,14 @@ export function GlobalStyle() {
       input::placeholder, textarea::placeholder { color: #AEAEB2; }
       input, select, textarea { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; }
       body { margin: 0; background: ${LIGHT.bg}; }
+
+      /* Pulsing dot/badge for the live-location indicator and map pins. */
+      @keyframes pulseLoc { 0% { box-shadow: 0 0 0 0 rgba(61,122,92,0.5); } 70% { box-shadow: 0 0 0 8px rgba(61,122,92,0); } 100% { box-shadow: 0 0 0 0 rgba(61,122,92,0); } }
+      .pulse-loc { animation: pulseLoc 1.8s cubic-bezier(0.22,1,0.36,1) infinite; }
+      @media (prefers-reduced-motion: reduce) {
+        .tap:active { transform: none; }
+        .pulse-loc { animation: none; }
+      }
     `}</style>
   )
 }
