@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Trash2, Plus, Download, CreditCard } from 'lucide-react'
+import { Trash2, Plus, Download, CreditCard, CheckCircle2 } from 'lucide-react'
 import { updateCompanySettings } from '../lib/settings'
 import { getMyPlan, getMySubscriptionDetail, cancelMySubscription } from '../lib/plans'
 import { listLocations, createLocation, deleteLocation } from '../lib/locations'
 import { downloadCompanyExport } from '../lib/dataExport'
 import { LIGHT } from '../theme'
 import { SectionLabel, EmptyState, ConfirmDialog } from './ui'
+import { useEscapeToClose } from './useEscapeToClose'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, Checkbox, usePendingAction } from '../auth/ui'
 
 // Owner-only settings. Starts with just Pricing & Revenue - the numbers
@@ -29,8 +30,32 @@ export default function SettingsPage({ company, onSaved }) {
 // alone (getMyPlan) don't answer "what happens if I cancel", so this shows
 // the real Stripe-backed state and puts the cancel action behind a
 // confirmation that says exactly that.
+// What's actually true about staying, keyed by plan - not generic
+// "we'll miss you" copy. Growth/Pro each name the specific things that
+// plan tier includes, since a vague "you'll lose your benefits" is easy
+// to click past but "you'll lose multi-location support" isn't if that's
+// the reason they signed up in the first place.
+const RETENTION_BENEFITS = {
+  starter: [
+    'Your AI receptionist keeps answering every call, day or night - no more missed jobs going to voicemail.',
+    'Every lead stays in your pipeline automatically, even callers who never book.',
+  ],
+  growth: [
+    'Your AI receptionist keeps answering every call, day or night - no more missed jobs going to voicemail.',
+    'Deposits, SMS reminders, and your CRM automations (winback, review requests) keep running without you touching them.',
+    'A/B tested call scripts keep improving your booking rate over time.',
+  ],
+  pro: [
+    'Your AI receptionist keeps answering every call across every location, day or night.',
+    'Multi-location dispatch and your combined owner view stay intact - you’d lose the ability to manage more than one location on a lower plan.',
+    'Deposits, SMS reminders, CRM automations, and A/B tested call scripts keep running without you touching them.',
+  ],
+}
+const DEFAULT_RETENTION_BENEFITS = RETENTION_BENEFITS.growth
+
 function BillingSection() {
   const [sub, setSub] = useState(undefined)
+  const [retaining, setRetaining] = useState(false) // "wait, don't go" screen
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -83,14 +108,24 @@ function BillingSection() {
         <ErrorText>{error}</ErrorText>
         {!sub.cancel_at_period_end && (
           <button
+            type="button"
             className="tap"
-            onClick={() => setConfirming(true)}
+            onClick={() => setRetaining(true)}
             style={{ fontSize: 12, fontWeight: 600, color: LIGHT.alert }}
           >
             Cancel Subscription
           </button>
         )}
       </div>
+
+      {retaining && (
+        <RetentionScreen
+          plan={sub.plan}
+          onStay={() => setRetaining(false)}
+          onContinueToCancel={() => { setRetaining(false); setConfirming(true) }}
+        />
+      )}
+
       {confirming && (
         <ConfirmDialog
           title="Cancel your subscription?"
@@ -102,6 +137,50 @@ function BillingSection() {
           onCancel={() => { if (!busy) { setConfirming(false); setError('') } }}
         />
       )}
+    </div>
+  )
+}
+
+// The retention step, shown BEFORE the final confirm - concrete, plan-
+// specific reasons to stay rather than a generic "are you sure?" Staying
+// (onStay) is the visually primary action; continuing to cancel is a plain
+// text link, not a second prominent button, so the screen doesn't nudge
+// someone toward cancelling just by giving both options equal weight.
+function RetentionScreen({ plan, onStay, onContinueToCancel }) {
+  useEscapeToClose(onStay)
+  const benefits = RETENTION_BENEFITS[plan] || DEFAULT_RETENTION_BENEFITS
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="retention-title" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 80, padding: 20 }}>
+      <div style={{ background: LIGHT.card, borderRadius: 20, padding: 24, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+        <div id="retention-title" style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink, marginBottom: 6 }}>Before you go - here's what you'd be turning off</div>
+        <div style={{ fontSize: 12.5, color: LIGHT.sub, marginBottom: 16, lineHeight: 1.5 }}>
+          These keep running right up until your subscription actually ends. Cancelling stops all of them.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+          {benefits.map((b, i) => (
+            <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+              <CheckCircle2 size={15} color={LIGHT.success} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+              <span style={{ fontSize: 12.5, color: LIGHT.ink, lineHeight: 1.45 }}>{b}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="tap"
+          onClick={onStay}
+          style={{ width: '100%', textAlign: 'center', background: LIGHT.ink, color: '#fff', borderRadius: 10, padding: '12px 0', fontSize: 14, fontWeight: 700, marginBottom: 12 }}
+        >
+          Never mind, keep my plan
+        </button>
+        <button
+          type="button"
+          className="tap"
+          onClick={onContinueToCancel}
+          style={{ width: '100%', textAlign: 'center', fontSize: 12.5, fontWeight: 600, color: LIGHT.sub }}
+        >
+          Continue to cancel
+        </button>
+      </div>
     </div>
   )
 }

@@ -75,18 +75,20 @@
 
     <div class="card">
       <form id="requestForm">
-        <label>What would you like to do?</label>
-        <div class="radio-row">
-          <label class="radio-opt active" data-type="access">
-            <input type="radio" name="requestType" value="access" checked> See my data
-          </label>
-          <label class="radio-opt" data-type="correction">
-            <input type="radio" name="requestType" value="correction"> Correct it
-          </label>
-          <label class="radio-opt" data-type="deletion">
-            <input type="radio" name="requestType" value="deletion"> Delete it
-          </label>
-        </div>
+        <fieldset style="border: none; padding: 0; margin: 0;">
+          <legend style="display: block; font-size: 12px; font-weight: 700; color: var(--steel); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; margin-top: 16px; padding: 0;">What would you like to do?</legend>
+          <div class="radio-row">
+            <label class="radio-opt active" data-type="access">
+              <input type="radio" name="requestType" value="access" checked> See my data
+            </label>
+            <label class="radio-opt" data-type="correction">
+              <input type="radio" name="requestType" value="correction"> Correct it
+            </label>
+            <label class="radio-opt" data-type="deletion">
+              <input type="radio" name="requestType" value="deletion"> Delete it
+            </label>
+          </div>
+        </fieldset>
 
         <label for="dr-name">Your full name</label>
         <input type="text" id="dr-name" required>
