@@ -55,10 +55,10 @@ export default function AdminLoginScreen() {
       </div>
       <h1 style={{ fontSize: 20, fontWeight: 700, color: LIGHT.ink, marginBottom: 20 }}>Super Admin Sign In</h1>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-        <FieldLabel>Email</FieldLabel>
-        <TextInput value={email} onChange={setEmail} placeholder="you@sable.com" type="email" autoComplete="username" />
-        <FieldLabel>Password</FieldLabel>
-        <TextInput value={password} onChange={setPassword} placeholder="••••••••" type="password" autoComplete="current-password" />
+        <FieldLabel htmlFor="field-email-1">Email</FieldLabel>
+        <TextInput id="field-email-1" value={email} onChange={setEmail} placeholder="you@sable.com" type="email" autoComplete="username" />
+        <FieldLabel htmlFor="field-password-1">Password</FieldLabel>
+        <TextInput id="field-password-1" value={password} onChange={setPassword} placeholder="••••••••" type="password" autoComplete="current-password" />
         <ErrorText>{error}</ErrorText>
         <PrimaryButton onClick={submit} disabled={loading}>
           {loading ? 'Signing in…' : mode === 'signup' ? 'Create Account' : 'Sign In'}

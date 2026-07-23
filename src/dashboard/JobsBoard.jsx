@@ -334,10 +334,10 @@ function NewJobModal({ jobTypes, company, onClose, onCreated }) {
           <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
         </div>
 
-        <FieldLabel>Customer name</FieldLabel>
-        <TextInput value={customerName} onChange={setCustomerName} placeholder="Sarah Chen" />
-        <FieldLabel>Customer phone</FieldLabel>
-        <TextInput value={customerPhone} onChange={setCustomerPhone} placeholder="(403) 555-0119" type="tel" />
+        <FieldLabel htmlFor="field-customer-name-1">Customer name</FieldLabel>
+        <TextInput id="field-customer-name-1" value={customerName} onChange={setCustomerName} placeholder="Sarah Chen" />
+        <FieldLabel htmlFor="field-customer-phone-1">Customer phone</FieldLabel>
+        <TextInput id="field-customer-phone-1" value={customerPhone} onChange={setCustomerPhone} placeholder="(403) 555-0119" type="tel" />
         {customerPhone.trim() && (
           <Checkbox
             checked={smsConsent}
@@ -346,8 +346,8 @@ function NewJobModal({ jobTypes, company, onClose, onCreated }) {
             hint={`Only check this if they agreed. Read or convey: ${smsConsentScript(company?.name)}`}
           />
         )}
-        <FieldLabel>Job address</FieldLabel>
-        <TextInput value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
+        <FieldLabel htmlFor="field-job-address-1">Job address</FieldLabel>
+        <TextInput id="field-job-address-1" value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
 
         <FieldLabel>Job type</FieldLabel>
         <select value={jobTypeId} onChange={(e) => setJobTypeId(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
@@ -364,22 +364,22 @@ function NewJobModal({ jobTypes, company, onClose, onCreated }) {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <FieldLabel>Price low</FieldLabel>
-            <TextInput value={priceLow} onChange={setPriceLow} placeholder="320" type="number" />
+            <FieldLabel htmlFor="field-price-low-1">Price low</FieldLabel>
+            <TextInput id="field-price-low-1" value={priceLow} onChange={setPriceLow} placeholder="320" type="number" />
           </div>
           <div style={{ flex: 1 }}>
-            <FieldLabel>Price high</FieldLabel>
-            <TextInput value={priceHigh} onChange={setPriceHigh} placeholder="385" type="number" />
+            <FieldLabel htmlFor="field-price-high-1">Price high</FieldLabel>
+            <TextInput id="field-price-high-1" value={priceHigh} onChange={setPriceHigh} placeholder="385" type="number" />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <FieldLabel>Date</FieldLabel>
-            <TextInput value={scheduledDate} onChange={setScheduledDate} type="date" />
+            <FieldLabel htmlFor="field-date-1">Date</FieldLabel>
+            <TextInput id="field-date-1" value={scheduledDate} onChange={setScheduledDate} type="date" />
           </div>
           <div style={{ flex: 1 }}>
-            <FieldLabel>Window</FieldLabel>
-            <TextInput value={scheduledWindow} onChange={setScheduledWindow} placeholder="9:00-11:00 AM" />
+            <FieldLabel htmlFor="field-window-1">Window</FieldLabel>
+            <TextInput id="field-window-1" value={scheduledWindow} onChange={setScheduledWindow} placeholder="9:00-11:00 AM" />
           </div>
         </div>
 

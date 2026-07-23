@@ -26,10 +26,10 @@ export default function LoginScreen({ onSignup, onForgotPassword }) {
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0' }}><div style={{ flex: 1, height: 1, background: LIGHT.border }} /><span style={{ fontSize: 12, color: LIGHT.sub }}>or</span><div style={{ flex: 1, height: 1, background: LIGHT.border }} /></div>
 
-        <FieldLabel>Email</FieldLabel>
-        <TextInput value={email} onChange={setEmail} placeholder="you@company.com" type="email" autoComplete="email" />
-        <FieldLabel>Password</FieldLabel>
-        <TextInput value={password} onChange={setPassword} placeholder="••••••••" type="password" autoComplete="current-password" />
+        <FieldLabel htmlFor="field-email-4">Email</FieldLabel>
+        <TextInput id="field-email-4" value={email} onChange={setEmail} placeholder="you@company.com" type="email" autoComplete="email" />
+        <FieldLabel htmlFor="field-password-3">Password</FieldLabel>
+        <TextInput id="field-password-3" value={password} onChange={setPassword} placeholder="••••••••" type="password" autoComplete="current-password" />
         <ErrorText>{error}</ErrorText>
         <PrimaryButton onClick={submit} disabled={loading || !email || !password}>
           {loading ? 'Signing in…' : 'Sign In'}

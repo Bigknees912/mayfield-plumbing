@@ -119,12 +119,12 @@ function AddCompanyModal({ onClose, onCreated }) {
         </div>
       ) : (
         <div>
-          <FieldLabel>Business name</FieldLabel>
-          <TextInput value={name} onChange={setName} placeholder="Reyes Plumbing Co." />
-          <FieldLabel>Contact email</FieldLabel>
-          <TextInput value={contactEmail} onChange={setContactEmail} placeholder="owner@example.com" type="email" />
-          <FieldLabel>Trade</FieldLabel>
-          <TextInput value={trade} onChange={setTrade} placeholder="Plumbing" />
+          <FieldLabel htmlFor="field-business-name-1">Business name</FieldLabel>
+          <TextInput id="field-business-name-1" value={name} onChange={setName} placeholder="Reyes Plumbing Co." />
+          <FieldLabel htmlFor="field-contact-email-1">Contact email</FieldLabel>
+          <TextInput id="field-contact-email-1" value={contactEmail} onChange={setContactEmail} placeholder="owner@example.com" type="email" />
+          <FieldLabel htmlFor="field-trade-1">Trade</FieldLabel>
+          <TextInput id="field-trade-1" value={trade} onChange={setTrade} placeholder="Plumbing" />
           <FieldLabel>Initial plan</FieldLabel>
           <select value={plan} onChange={(e) => setPlan(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
             {plans.map((p) => <option key={p.key} value={p.key}>{p.name} — {p.monthly_price > 0 ? money(p.monthly_price) + '/mo' : 'Free'}</option>)}

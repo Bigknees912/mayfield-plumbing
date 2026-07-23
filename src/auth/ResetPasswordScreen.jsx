@@ -32,10 +32,10 @@ export default function ResetPasswordScreen({ onDone }) {
         <h1 style={{ fontSize: 20, fontWeight: 700, color: LIGHT.ink, marginBottom: 4 }}>Set a new password</h1>
       </div>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-        <FieldLabel>New password</FieldLabel>
-        <TextInput value={password} onChange={setPassword} placeholder="At least 8 characters" type="password" autoComplete="new-password" />
-        <FieldLabel>Confirm new password</FieldLabel>
-        <TextInput value={confirm} onChange={setConfirm} placeholder="Re-enter password" type="password" autoComplete="new-password" />
+        <FieldLabel htmlFor="field-new-password-1">New password</FieldLabel>
+        <TextInput id="field-new-password-1" value={password} onChange={setPassword} placeholder="At least 8 characters" type="password" autoComplete="new-password" />
+        <FieldLabel htmlFor="field-confirm-new-password-1">Confirm new password</FieldLabel>
+        <TextInput id="field-confirm-new-password-1" value={confirm} onChange={setConfirm} placeholder="Re-enter password" type="password" autoComplete="new-password" />
         <ErrorText>{error}</ErrorText>
         <PrimaryButton onClick={submit} disabled={loading || !password || !confirm}>
           {loading ? 'Saving…' : 'Save New Password'}

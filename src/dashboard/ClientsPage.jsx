@@ -288,10 +288,10 @@ function AddContactModal({ company, onClose, onCreated }) {
           <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
         </div>
 
-        <FieldLabel>Name</FieldLabel>
-        <TextInput value={name} onChange={setName} placeholder="Sarah Chen" />
-        <FieldLabel>Phone</FieldLabel>
-        <TextInput value={phone} onChange={setPhone} placeholder="(403) 555-0119" type="tel" />
+        <FieldLabel htmlFor="field-name-3">Name</FieldLabel>
+        <TextInput id="field-name-3" value={name} onChange={setName} placeholder="Sarah Chen" />
+        <FieldLabel htmlFor="field-phone-1">Phone</FieldLabel>
+        <TextInput id="field-phone-1" value={phone} onChange={setPhone} placeholder="(403) 555-0119" type="tel" />
         {phone.trim() && (
           <Checkbox
             checked={smsConsent}
@@ -300,10 +300,10 @@ function AddContactModal({ company, onClose, onCreated }) {
             hint={`Only check this if they agreed. Read or convey: ${smsConsentScript(company?.name)}`}
           />
         )}
-        <FieldLabel>Email</FieldLabel>
-        <TextInput value={email} onChange={setEmail} placeholder="sarah@example.com" type="email" />
-        <FieldLabel>Address</FieldLabel>
-        <TextInput value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
+        <FieldLabel htmlFor="field-email-5">Email</FieldLabel>
+        <TextInput id="field-email-5" value={email} onChange={setEmail} placeholder="sarah@example.com" type="email" />
+        <FieldLabel htmlFor="field-address-1">Address</FieldLabel>
+        <TextInput id="field-address-1" value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
 
         <ErrorText>{error}</ErrorText>
         <PrimaryButton onClick={submit} disabled={!canSubmit}>

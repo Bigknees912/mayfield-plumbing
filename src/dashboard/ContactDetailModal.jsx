@@ -341,20 +341,20 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
 
               {addingContract ? (
                 <div style={{ background: LIGHT.card, borderRadius: 12, padding: 10 }}>
-                  <FieldLabel>Contract name</FieldLabel>
-                  <TextInput value={contractName} onChange={setContractName} placeholder="Annual Furnace Tune-Up" />
+                  <FieldLabel htmlFor="field-contract-name-1">Contract name</FieldLabel>
+                  <TextInput id="field-contract-name-1" value={contractName} onChange={setContractName} placeholder="Annual Furnace Tune-Up" />
                   <div style={{ display: 'flex', gap: 10 }}>
                     <div style={{ flex: 1 }}>
-                      <FieldLabel>Frequency (months)</FieldLabel>
-                      <TextInput value={contractFrequency} onChange={setContractFrequency} placeholder="12" />
+                      <FieldLabel htmlFor="field-frequency-months-1">Frequency (months)</FieldLabel>
+                      <TextInput id="field-frequency-months-1" value={contractFrequency} onChange={setContractFrequency} placeholder="12" />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <FieldLabel>Price ($)</FieldLabel>
-                      <TextInput value={contractPrice} onChange={setContractPrice} placeholder="189" />
+                      <FieldLabel htmlFor="field-price-1">Price ($)</FieldLabel>
+                      <TextInput id="field-price-1" value={contractPrice} onChange={setContractPrice} placeholder="189" />
                     </div>
                   </div>
-                  <FieldLabel>Next due date</FieldLabel>
-                  <TextInput value={contractNextDue} onChange={setContractNextDue} type="date" />
+                  <FieldLabel htmlFor="field-next-due-date-1">Next due date</FieldLabel>
+                  <TextInput id="field-next-due-date-1" value={contractNextDue} onChange={setContractNextDue} type="date" />
                   <ErrorText>{addContractError}</ErrorText>
                   <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                     <PrimaryButton onClick={submitContract} disabled={savingContract} style={{ flex: 1 }}>

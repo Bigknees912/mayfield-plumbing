@@ -221,10 +221,10 @@ function NewEstimateModal({ onClose, onCreated }) {
           <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
         </div>
 
-        <FieldLabel>Customer name</FieldLabel>
-        <TextInput value={customerName} onChange={setCustomerName} placeholder="Sarah Chen" />
-        <FieldLabel>Customer phone (optional)</FieldLabel>
-        <TextInput value={customerPhone} onChange={setCustomerPhone} placeholder="(403) 555-0119" type="tel" />
+        <FieldLabel htmlFor="field-customer-name-2">Customer name</FieldLabel>
+        <TextInput id="field-customer-name-2" value={customerName} onChange={setCustomerName} placeholder="Sarah Chen" />
+        <FieldLabel htmlFor="field-customer-phone-optional-1">Customer phone (optional)</FieldLabel>
+        <TextInput id="field-customer-phone-optional-1" value={customerPhone} onChange={setCustomerPhone} placeholder="(403) 555-0119" type="tel" />
 
         <FieldLabel>Job type</FieldLabel>
         <select value={jobTypeId} onChange={(e) => setJobTypeId(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
@@ -234,12 +234,12 @@ function NewEstimateModal({ onClose, onCreated }) {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <FieldLabel>Price low</FieldLabel>
-            <TextInput value={priceLow} onChange={setPriceLow} placeholder="320" type="number" />
+            <FieldLabel htmlFor="field-price-low-2">Price low</FieldLabel>
+            <TextInput id="field-price-low-2" value={priceLow} onChange={setPriceLow} placeholder="320" type="number" />
           </div>
           <div style={{ flex: 1 }}>
-            <FieldLabel>Price high</FieldLabel>
-            <TextInput value={priceHigh} onChange={setPriceHigh} placeholder="385" type="number" />
+            <FieldLabel htmlFor="field-price-high-2">Price high</FieldLabel>
+            <TextInput id="field-price-high-2" value={priceHigh} onChange={setPriceHigh} placeholder="385" type="number" />
           </div>
         </div>
 
@@ -284,24 +284,24 @@ function ConvertToJobModal({ estimate, onClose, onConverted }) {
 
         {needsCustomer && (
           <>
-            <FieldLabel>Customer name</FieldLabel>
-            <TextInput value={customerName} onChange={setCustomerName} placeholder="Sarah Chen" />
-            <FieldLabel>Customer phone</FieldLabel>
-            <TextInput value={customerPhone} onChange={setCustomerPhone} placeholder="(403) 555-0119" type="tel" />
+            <FieldLabel htmlFor="field-customer-name-3">Customer name</FieldLabel>
+            <TextInput id="field-customer-name-3" value={customerName} onChange={setCustomerName} placeholder="Sarah Chen" />
+            <FieldLabel htmlFor="field-customer-phone-2">Customer phone</FieldLabel>
+            <TextInput id="field-customer-phone-2" value={customerPhone} onChange={setCustomerPhone} placeholder="(403) 555-0119" type="tel" />
           </>
         )}
 
-        <FieldLabel>Job address</FieldLabel>
-        <TextInput value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
+        <FieldLabel htmlFor="field-job-address-2">Job address</FieldLabel>
+        <TextInput id="field-job-address-2" value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <FieldLabel>Date (optional)</FieldLabel>
-            <TextInput value={scheduledDate} onChange={setScheduledDate} type="date" />
+            <FieldLabel htmlFor="field-date-optional-1">Date (optional)</FieldLabel>
+            <TextInput id="field-date-optional-1" value={scheduledDate} onChange={setScheduledDate} type="date" />
           </div>
           <div style={{ flex: 1 }}>
-            <FieldLabel>Window (optional)</FieldLabel>
-            <TextInput value={scheduledWindow} onChange={setScheduledWindow} placeholder="9:00-11:00 AM" />
+            <FieldLabel htmlFor="field-window-optional-1">Window (optional)</FieldLabel>
+            <TextInput id="field-window-optional-1" value={scheduledWindow} onChange={setScheduledWindow} placeholder="9:00-11:00 AM" />
           </div>
         </div>
 

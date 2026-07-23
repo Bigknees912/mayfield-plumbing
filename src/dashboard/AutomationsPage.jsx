@@ -199,8 +199,8 @@ function AutomationFormModal({ automation, onClose, onSaved }) {
           <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
         </div>
 
-        <FieldLabel>Name</FieldLabel>
-        <TextInput value={name} onChange={setName} placeholder="Ask for a Google review" />
+        <FieldLabel htmlFor="field-name-2">Name</FieldLabel>
+        <TextInput id="field-name-2" value={name} onChange={setName} placeholder="Ask for a Google review" />
 
         <FieldLabel>When...</FieldLabel>
         <Select value={triggerType} onChange={setTriggerType} options={TRIGGER_TYPES.map((t) => ({ value: t.key, label: t.label }))} />

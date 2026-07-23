@@ -223,10 +223,10 @@ function LocationsSection() {
         )}
       </div>
       <div style={{ background: LIGHT.card, borderRadius: 16, padding: 16 }}>
-        <FieldLabel>Location name</FieldLabel>
-        <TextInput value={name} onChange={setName} placeholder="Downtown Shop" />
-        <FieldLabel>Address (optional)</FieldLabel>
-        <TextInput value={address} onChange={setAddress} placeholder="123 Main St" />
+        <FieldLabel htmlFor="field-location-name-1">Location name</FieldLabel>
+        <TextInput id="field-location-name-1" value={name} onChange={setName} placeholder="Downtown Shop" />
+        <FieldLabel htmlFor="field-address-optional-1">Address (optional)</FieldLabel>
+        <TextInput id="field-address-optional-1" value={address} onChange={setAddress} placeholder="123 Main St" />
         <ErrorText>{error}</ErrorText>
         <PrimaryButton onClick={add} disabled={loading}>
           <Plus size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> {loading ? 'Adding…' : 'Add Location'}
@@ -294,32 +294,32 @@ function PricingRevenueSection({ company, onSaved }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div>
-          <FieldLabel>Base fee ($)</FieldLabel>
-          <TextInput value={baseFee} onChange={setBaseFee} placeholder="149" />
+          <FieldLabel htmlFor="field-base-fee-1">Base fee ($)</FieldLabel>
+          <TextInput id="field-base-fee-1" value={baseFee} onChange={setBaseFee} placeholder="149" />
         </div>
         <div>
-          <FieldLabel>Default hourly rate ($)</FieldLabel>
-          <TextInput value={hourlyRate} onChange={setHourlyRate} placeholder="135" />
+          <FieldLabel htmlFor="field-default-hourly-rate-1">Default hourly rate ($)</FieldLabel>
+          <TextInput id="field-default-hourly-rate-1" value={hourlyRate} onChange={setHourlyRate} placeholder="135" />
         </div>
         <div>
-          <FieldLabel>Same-day multiplier</FieldLabel>
-          <TextInput value={samedayMultiplier} onChange={setSamedayMultiplier} placeholder="1.25" />
+          <FieldLabel htmlFor="field-same-day-multiplier-1">Same-day multiplier</FieldLabel>
+          <TextInput id="field-same-day-multiplier-1" value={samedayMultiplier} onChange={setSamedayMultiplier} placeholder="1.25" />
         </div>
         <div>
-          <FieldLabel>Emergency multiplier</FieldLabel>
-          <TextInput value={emergencyMultiplier} onChange={setEmergencyMultiplier} placeholder="1.75" />
+          <FieldLabel htmlFor="field-emergency-multiplier-1">Emergency multiplier</FieldLabel>
+          <TextInput id="field-emergency-multiplier-1" value={emergencyMultiplier} onChange={setEmergencyMultiplier} placeholder="1.75" />
         </div>
         <div>
-          <FieldLabel>Deposit threshold ($)</FieldLabel>
-          <TextInput value={depositThreshold} onChange={setDepositThreshold} placeholder="800" />
+          <FieldLabel htmlFor="field-deposit-threshold-1">Deposit threshold ($)</FieldLabel>
+          <TextInput id="field-deposit-threshold-1" value={depositThreshold} onChange={setDepositThreshold} placeholder="800" />
         </div>
         <div>
-          <FieldLabel>Deposit (%)</FieldLabel>
-          <TextInput value={depositPct} onChange={setDepositPct} placeholder="20" />
+          <FieldLabel htmlFor="field-deposit-1">Deposit (%)</FieldLabel>
+          <TextInput id="field-deposit-1" value={depositPct} onChange={setDepositPct} placeholder="20" />
         </div>
         <div>
-          <FieldLabel>Tech commission (%)</FieldLabel>
-          <TextInput value={commissionPct} onChange={setCommissionPct} placeholder="15" />
+          <FieldLabel htmlFor="field-tech-commission-1">Tech commission (%)</FieldLabel>
+          <TextInput id="field-tech-commission-1" value={commissionPct} onChange={setCommissionPct} placeholder="15" />
         </div>
       </div>
 
@@ -335,12 +335,12 @@ function PricingRevenueSection({ company, onSaved }) {
       {financingEnabled && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10, marginBottom: 4 }}>
           <div>
-            <FieldLabel>Threshold ($)</FieldLabel>
-            <TextInput value={financingThreshold} onChange={setFinancingThreshold} placeholder="1500" />
+            <FieldLabel htmlFor="field-threshold-1">Threshold ($)</FieldLabel>
+            <TextInput id="field-threshold-1" value={financingThreshold} onChange={setFinancingThreshold} placeholder="1500" />
           </div>
           <div>
-            <FieldLabel>Financing partner link</FieldLabel>
-            <TextInput value={financingPartnerUrl} onChange={setFinancingPartnerUrl} placeholder="https://www.wisetack.com/apply/..." />
+            <FieldLabel htmlFor="field-financing-partner-link-1">Financing partner link</FieldLabel>
+            <TextInput id="field-financing-partner-link-1" value={financingPartnerUrl} onChange={setFinancingPartnerUrl} placeholder="https://www.wisetack.com/apply/..." />
           </div>
         </div>
       )}
@@ -399,8 +399,8 @@ function GoalsSection({ company, onSaved }) {
 
       {goalType !== 'none' && (
         <div style={{ marginBottom: 4 }}>
-          <FieldLabel>{goalType === 'revenue' ? 'Target revenue ($)' : 'Target job count'}</FieldLabel>
-          <TextInput value={goalTarget} onChange={setGoalTarget} placeholder={goalType === 'revenue' ? '40000' : '60'} />
+          <FieldLabel htmlFor="field-goaltype-revenue-target-revenue-target-job-count-1">{goalType === 'revenue' ? 'Target revenue ($)' : 'Target job count'}</FieldLabel>
+          <TextInput id="field-goaltype-revenue-target-revenue-target-job-count-1" value={goalTarget} onChange={setGoalTarget} placeholder={goalType === 'revenue' ? '40000' : '60'} />
         </div>
       )}
 
