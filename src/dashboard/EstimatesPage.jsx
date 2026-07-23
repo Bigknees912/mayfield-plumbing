@@ -220,7 +220,7 @@ function NewEstimateModal({ onClose, onCreated }) {
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 20, maxWidth: 380, width: '100%', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>New Estimate</div>
-          <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
+          <button type="button" className="tap" onClick={onClose} aria-label="Close"><X size={18} color={LIGHT.sub} aria-hidden="true" /></button>
         </div>
 
         <FieldLabel htmlFor="field-customer-name-2">Customer name</FieldLabel>
@@ -282,7 +282,7 @@ function ConvertToJobModal({ estimate, onClose, onConverted }) {
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 20, maxWidth: 380, width: '100%', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>Convert to Job</div>
-          <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
+          <button type="button" className="tap" onClick={onClose} aria-label="Close"><X size={18} color={LIGHT.sub} aria-hidden="true" /></button>
         </div>
 
         {needsCustomer && (

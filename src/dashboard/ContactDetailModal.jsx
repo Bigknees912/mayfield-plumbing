@@ -208,7 +208,7 @@ export default function ContactDetailModal({ contact, allTags, onClose, onTagsCh
               <div style={{ fontSize: 11, color: LIGHT.sub }}>{stageLabel}</div>
             </div>
           </div>
-          <button className="tap" onClick={onClose}><X size={20} color={LIGHT.sub} /></button>
+          <button type="button" className="tap" onClick={onClose} aria-label="Close"><X size={20} color={LIGHT.sub} aria-hidden="true" /></button>
         </div>
 
         <button

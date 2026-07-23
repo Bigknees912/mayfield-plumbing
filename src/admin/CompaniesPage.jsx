@@ -269,7 +269,7 @@ function ModalShell({ title, onClose, children }) {
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: LIGHT.ink }}>{title}</div>
-          <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
+          <button type="button" className="tap" onClick={onClose} aria-label="Close"><X size={18} color={LIGHT.sub} aria-hidden="true" /></button>
         </div>
         {children}
       </div>

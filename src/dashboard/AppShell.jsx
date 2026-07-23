@@ -149,8 +149,8 @@ export default function AppShell({ session, profile, onSignOut }) {
                 )}
               </button>
             )}
-            <button className="tap" onClick={handleSignOut} disabled={signingOut} style={{ width: 36, height: 36, borderRadius: 18, background: LIGHT.card, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
-              <LogOut size={16} color={LIGHT.ink} />
+            <button type="button" className="tap" onClick={handleSignOut} disabled={signingOut} aria-label="Sign out" style={{ width: 36, height: 36, borderRadius: 18, background: LIGHT.card, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
+              <LogOut size={16} color={LIGHT.ink} aria-hidden="true" />
             </button>
           </div>
         </div>

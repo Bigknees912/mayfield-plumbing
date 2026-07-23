@@ -252,7 +252,7 @@ function JobDetailModal({ job, onClose, onSaveNotes }) {
             <Badge bg={u.bg} fg={u.fg}>{u.label}</Badge>
             <div style={{ fontSize: 19, fontWeight: 700, color: LIGHT.ink, marginTop: 8 }}>{job.description}</div>
           </div>
-          <button className="tap" onClick={onClose}><X size={20} color={LIGHT.sub} /></button>
+          <button type="button" className="tap" onClick={onClose} aria-label="Close"><X size={20} color={LIGHT.sub} aria-hidden="true" /></button>
         </div>
         <div style={{ fontSize: 13, color: LIGHT.sub, marginBottom: 18 }}>{job.scheduled_window} · {job.scheduled_date}</div>
 

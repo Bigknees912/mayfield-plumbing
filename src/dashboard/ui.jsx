@@ -80,8 +80,8 @@ export function ErrorBanner({ message, onRetry, onDismiss }) {
     <div style={{ background: LIGHT.alertSoft, color: LIGHT.alert, borderRadius: 10, padding: '10px 12px', fontSize: 12, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
       <span style={{ flex: 1 }}>{message}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        {onRetry && <button className="tap" onClick={onRetry} style={{ fontSize: 11.5, fontWeight: 700, color: LIGHT.alert }}>Retry</button>}
-        {onDismiss && <button className="tap" onClick={onDismiss}><X size={14} color={LIGHT.alert} /></button>}
+        {onRetry && <button type="button" className="tap" onClick={onRetry} style={{ fontSize: 11.5, fontWeight: 700, color: LIGHT.alert }}>Retry</button>}
+        {onDismiss && <button type="button" className="tap" onClick={onDismiss} aria-label="Dismiss"><X size={14} color={LIGHT.alert} aria-hidden="true" /></button>}
       </div>
     </div>
   )

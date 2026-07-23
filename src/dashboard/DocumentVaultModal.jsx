@@ -68,7 +68,7 @@ export default function DocumentVaultModal({ contact, onClose }) {
             <div style={{ fontSize: 16, fontWeight: 700, color: LIGHT.ink }}>Document Vault</div>
             <div style={{ fontSize: 11.5, color: LIGHT.sub }}>{contact.name}</div>
           </div>
-          <button className="tap" onClick={onClose}><X size={20} color={LIGHT.sub} /></button>
+          <button type="button" className="tap" onClick={onClose} aria-label="Close"><X size={20} color={LIGHT.sub} aria-hidden="true" /></button>
         </div>
         <div style={{ fontSize: 12, color: LIGHT.sub, marginBottom: 16, lineHeight: 1.4 }}>
           Every invoice, job photo, and warranty note tied to this customer, newest first.
@@ -164,8 +164,8 @@ function PhotoEntry({ photo, onDeleted }) {
         <div style={{ fontSize: 10.5, color: LIGHT.sub, marginTop: 2 }}>{formatDate(photo.created_at)}</div>
         <ErrorText>{error}</ErrorText>
       </div>
-      <button className="tap" onClick={remove} disabled={deleting} style={{ color: LIGHT.sub, flexShrink: 0, alignSelf: 'flex-start' }}>
-        <Trash2 size={13} />
+      <button type="button" className="tap" onClick={remove} disabled={deleting} aria-label="Delete photo" style={{ color: LIGHT.sub, flexShrink: 0, alignSelf: 'flex-start' }}>
+        <Trash2 size={13} aria-hidden="true" />
       </button>
     </div>
   )

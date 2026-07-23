@@ -127,8 +127,8 @@ function PlanCard({ plan, isNew, onMoveUp, onMoveDown, onSaved, onCancel }) {
       <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
         {!isNew && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 2 }}>
-            <button className="tap" disabled={!onMoveUp} onClick={onMoveUp} style={{ opacity: onMoveUp ? 1 : 0.3 }}><ChevronUp size={15} color={LIGHT.sub} /></button>
-            <button className="tap" disabled={!onMoveDown} onClick={onMoveDown} style={{ opacity: onMoveDown ? 1 : 0.3 }}><ChevronDown size={15} color={LIGHT.sub} /></button>
+            <button type="button" className="tap" disabled={!onMoveUp} onClick={onMoveUp} aria-label="Move plan up" style={{ opacity: onMoveUp ? 1 : 0.3 }}><ChevronUp size={15} color={LIGHT.sub} aria-hidden="true" /></button>
+            <button type="button" className="tap" disabled={!onMoveDown} onClick={onMoveDown} aria-label="Move plan down" style={{ opacity: onMoveDown ? 1 : 0.3 }}><ChevronDown size={15} color={LIGHT.sub} aria-hidden="true" /></button>
           </div>
         )}
         <div style={{ flex: 1 }}>

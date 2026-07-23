@@ -143,7 +143,7 @@ export default function JobsBoard({ company, locationId }) {
                             <CheckCircle2 size={12} /> {assigningJobId === j.id ? 'Assigning…' : `Assign ${suggested.name.split(' ')[0]}`}
                           </button>
                         )}
-                        <button className="tap" onClick={() => setPickerFor(j.id)} disabled={assigningJobId === j.id} style={{ fontSize: 16, color: LIGHT.sub, padding: '4px 6px', flexShrink: 0 }}>⋯</button>
+                        <button type="button" className="tap" onClick={() => setPickerFor(j.id)} disabled={assigningJobId === j.id} aria-label="More options" style={{ fontSize: 16, color: LIGHT.sub, padding: '4px 6px', flexShrink: 0 }}>⋯</button>
                       </div>
                       {needsDeposit && (
                         <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${LIGHT.border}` }}>
@@ -225,15 +225,15 @@ function DepositLinkModal({ link, onClose }) {
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 20, maxWidth: 380, width: '100%' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>Deposit link ready</div>
-          <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
+          <button type="button" className="tap" onClick={onClose} aria-label="Close"><X size={18} color={LIGHT.sub} aria-hidden="true" /></button>
         </div>
         <div style={{ fontSize: 12.5, color: LIGHT.sub, marginBottom: 16 }}>
           {money(link.amount)} due. Share this link with the customer — it's a real Stripe checkout page.
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <input readOnly value={link.url} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 12, padding: '10px 12px', color: LIGHT.ink }} />
-          <button className="tap" onClick={copy} style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 10, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Copy size={15} color={LIGHT.ink} />
+          <input readOnly aria-label="Deposit checkout link" value={link.url} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 12, padding: '10px 12px', color: LIGHT.ink }} />
+          <button type="button" className="tap" onClick={copy} aria-label="Copy link" style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 10, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Copy size={15} color={LIGHT.ink} aria-hidden="true" />
           </button>
         </div>
         {copied && <div style={{ fontSize: 11.5, color: LIGHT.success, marginBottom: 10 }}>Copied</div>}
@@ -335,7 +335,7 @@ function NewJobModal({ jobTypes, company, onClose, onCreated }) {
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 20, maxWidth: 380, width: '100%', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: LIGHT.ink }}>New Job</div>
-          <button className="tap" onClick={onClose}><X size={18} color={LIGHT.sub} /></button>
+          <button type="button" className="tap" onClick={onClose} aria-label="Close"><X size={18} color={LIGHT.sub} aria-hidden="true" /></button>
         </div>
 
         <FieldLabel htmlFor="field-customer-name-1">Customer name</FieldLabel>
