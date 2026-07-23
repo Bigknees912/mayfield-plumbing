@@ -13,11 +13,11 @@
     --bg: #F5F4ED;
     --card: #FFFFFF;
     --ink: #1F1E1D;
-    --sub: #83807A;
+    --sub: #6B6964;
     --border: #E5E1D8;
-    --accent: #DA7756;
+    --accent: #94513A;
     --accent-soft: #F3E3DB;
-    --success: #3D7A5C;
+    --success: #376E53;
     --success-soft: #E4EEE7;
     --gold: #E0A94E;
     --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
@@ -37,6 +37,7 @@
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
   html { scroll-behavior: smooth; }
   body { font-family: 'Inter', sans-serif; color: var(--ink); background: var(--bg); overflow-x: hidden; }
   h1, h2, h3 { font-family: 'Oswald', sans-serif; font-weight: 600; letter-spacing: 0.2px; }

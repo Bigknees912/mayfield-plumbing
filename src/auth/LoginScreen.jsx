@@ -35,11 +35,11 @@ export default function LoginScreen({ onSignup, onForgotPassword }) {
           {loading ? 'Signing in…' : 'Sign In'}
         </PrimaryButton>
         <div style={{ textAlign: 'center', marginTop: 14 }}>
-          <span className="tap" onClick={onForgotPassword} style={{ fontSize: 12.5, color: LIGHT.sub }}>Forgot password?</span>
+          <button type="button" className="tap" onClick={onForgotPassword} style={{ fontSize: 12.5, color: LIGHT.sub }}>Forgot password?</button>
         </div>
       </div>
       <div style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: LIGHT.sub }}>
-        New here? <span className="tap" onClick={onSignup} style={{ color: LIGHT.accent, fontWeight: 700 }}>Create an account</span>
+        New here? <button type="button" className="tap" onClick={onSignup} style={{ color: LIGHT.accent, fontWeight: 700, display: 'inline' }}>Create an account</button>
       </div>
     </AuthShell>
   )

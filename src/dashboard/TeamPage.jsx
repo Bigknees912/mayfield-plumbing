@@ -117,27 +117,41 @@ export default function TeamPage({ locations = [] }) {
             const isOpen = expandedId === t.id
             return (
               <div key={t.id} style={{ background: LIGHT.card, borderRadius: 16, padding: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                <div className="tap" onClick={() => setExpandedId(isOpen ? null : t.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 17, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {initialsOf(t.name)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: LIGHT.ink }}>{t.name}</div>
-                    <div style={{ fontSize: 11.5, color: LIGHT.sub }}>{t.phone || t.email || 'Technician'}</div>
-                  </div>
-                  {outCount > 0 && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: LIGHT.alert, background: LIGHT.alertSoft, borderRadius: 20, padding: '4px 9px', flexShrink: 0 }}>
-                      <Package size={11} /> {outCount} out
-                    </span>
-                  )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* Only the expand/collapse affordance is a <button> - the
+                      select and Remove button below are its siblings, not
+                      nested inside it (a <select>/<button> can't legally
+                      live inside another <button>). */}
+                  <button
+                    type="button"
+                    className="tap"
+                    onClick={() => setExpandedId(isOpen ? null : t.id)}
+                    aria-expanded={isOpen}
+                    style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left' }}
+                  >
+                    <div aria-hidden="true" style={{ width: 34, height: 34, borderRadius: 17, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 12.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {initialsOf(t.name)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: LIGHT.ink }}>{t.name}</div>
+                      <div style={{ fontSize: 11.5, color: LIGHT.sub }}>{t.phone || t.email || 'Technician'}</div>
+                    </div>
+                    {outCount > 0 && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: LIGHT.alert, background: LIGHT.alertSoft, borderRadius: 20, padding: '4px 9px', flexShrink: 0 }}>
+                        <Package size={11} aria-hidden="true" /> {outCount} out
+                      </span>
+                    )}
+                  </button>
                   <LocationPicker member={t} setList={setTechs} />
                   <button
+                    type="button"
                     className="tap"
-                    onClick={(e) => { e.stopPropagation(); setRemoveError(''); setRemoving({ id: t.id, name: t.name }) }}
+                    onClick={() => { setRemoveError(''); setRemoving({ id: t.id, name: t.name }) }}
                     title="Remove from team"
+                    aria-label={`Remove ${t.name} from team`}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, color: LIGHT.alert, flexShrink: 0 }}
                   >
-                    <UserMinus size={15} />
+                    <UserMinus size={15} aria-hidden="true" />
                   </button>
                 </div>
 
@@ -188,12 +202,14 @@ export default function TeamPage({ locations = [] }) {
                 </div>
                 <LocationPicker member={oa} setList={setOfficeAdmins} />
                 <button
+                  type="button"
                   className="tap"
                   onClick={() => { setRemoveError(''); setRemoving({ id: oa.id, name: oa.name }) }}
                   title="Remove from team"
+                  aria-label={`Remove ${oa.name} from team`}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, color: LIGHT.alert, flexShrink: 0 }}
                 >
-                  <UserMinus size={15} />
+                  <UserMinus size={15} aria-hidden="true" />
                 </button>
               </div>
             ))}
