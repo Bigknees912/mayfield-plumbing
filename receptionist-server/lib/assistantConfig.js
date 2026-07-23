@@ -64,7 +64,13 @@ When a caller rambles, over-explains, or drifts off-topic: let them finish the s
 
 When a caller corrects themselves mid-sentence or contradicts something they said a moment ago ("actually it's not the kitchen sink, it's the bathroom one"), always keep their most recent statement, not their first one, for whichever field it affects. Confirm the correction in passing rather than starting the question over: "Bathroom sink, got it - and is that today or can it wait?" If two of their statements genuinely conflict and you can't tell which one is current, ask a single direct clarifying question naming both options instead of guessing.
 
-If a caller asks about something you have no way to help with right now - a dispute over a past invoice, a complaint about work already done, a question about a completely different trade, anything that isn't booking a ${tradeLower} job - don't guess an answer and don't apologize at length. Say in one short line that you'll have someone call them back about that specifically, then call the escalate_to_human tool with a brief reason. If they also have a real ${tradeLower} job to book in the same call, keep going with that normally after escalating the other thing.`;
+If a caller asks about something you have no way to help with right now - a dispute over a past invoice, a complaint about work already done, a question about a completely different trade, anything that isn't booking a ${tradeLower} job - don't guess an answer and don't apologize at length. Say in one short line that you'll have someone call them back about that specifically, then call the escalate_to_human tool with a brief reason. If they also have a real ${tradeLower} job to book in the same call, keep going with that normally after escalating the other thing.
+
+Read back the address and phone number in your own words before booking, so a mishearing gets caught before a tech is sent to the wrong place: "Just to confirm, that's [address] - is that right?" Do this once per call, briefly, not for every field.
+
+If the caller goes quiet for a while mid-call, check in once - "Still there?" - before assuming the line dropped. If they don't respond to that either, end the call politely rather than repeating yourself.
+
+Warmth matters as much as speed. A caller with a real emergency is often stressed - acknowledge it briefly ("that's not fun, let's get someone out there") before moving to the next question, don't just barrel through like a form. On a routine call, a small human touch at the end goes a long way: after booking, close with a short, genuine line like "we'll take care of you" or "thanks for calling" rather than ending abruptly the moment the tool call succeeds.`;
 }
 
 /**
@@ -90,6 +96,30 @@ function buildAssistantConfig({ company, jobTypes, webhookUrl, variant = "a" }) 
       provider: "11labs",
       voiceId: "REPLACE_WITH_YOUR_CHOSEN_VOICE_ID",
     },
+    // "Puts up with the customer talking": Vapi's call-behavior knobs, not
+    // prompt text - no system prompt can fix an assistant that barges in on
+    // a caller's mid-sentence pause or refuses to yield when talked over.
+    //   startSpeakingPlan.waitSeconds gives a caller who's mid-thought a
+    //     real half-second of silence before Alex assumes they're done and
+    //     starts talking - the single biggest source of "it cut me off."
+    //   stopSpeakingPlan lets the caller interrupt ALEX after just a couple
+    //     words, so correcting Alex mid-sentence ("no, the other one") works
+    //     the way it would with a human, not just at the end of a turn.
+    // Both are real Vapi assistant fields, not custom - tune waitSeconds up
+    // slightly for a slower-talking customer base if callers report being
+    // cut off in practice.
+    startSpeakingPlan: {
+      waitSeconds: 0.6,
+      smartEndpointingEnabled: true,
+    },
+    stopSpeakingPlan: {
+      numWords: 2,
+      voiceSeconds: 0.3,
+      backoffSeconds: 1,
+    },
+    // Trade jobsites and driving are loud - filters out background noise
+    // instead of transcribing it as if the caller said it.
+    backgroundDenoisingEnabled: true,
     serverUrl: webhookUrl,
     tools: [
       {
