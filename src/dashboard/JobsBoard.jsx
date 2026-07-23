@@ -134,7 +134,10 @@ export default function JobsBoard({ company, locationId }) {
                     <div key={j.id} style={{ background: LIGHT.card, borderRadius: 14, padding: 12, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 600, color: LIGHT.ink }}>{j.description}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: LIGHT.ink }}>{j.description}</div>
+                            {j.is_callback && <Badge bg={LIGHT.accentSoft} fg={LIGHT.accent}>Callback · no charge</Badge>}
+                          </div>
                           <div style={{ fontSize: 12, color: LIGHT.sub }}>{j.customers?.name || 'No customer'} · {j.address}</div>
                         </div>
                         {tech && <div style={{ width: 26, height: 26, borderRadius: 13, background: LIGHT.accentSoft, color: LIGHT.accent, fontSize: 10.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initialsOf(tech.name)}</div>}

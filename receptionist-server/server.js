@@ -206,6 +206,13 @@ async function runTool(name, args, callContext, promptVariant) {
         smsConsent: args.smsConsent === true,
       });
       if (!result.ok) return { booked: false, reason: result.reason };
+      // is_callback (see lib/booking.js's findRecentCallbackSource) means
+      // this is a no-charge return visit on recent work, not a fresh
+      // billable job - tell Alex explicitly so it gets said on the call
+      // instead of quietly showing up as $0 only on the office's dashboard.
+      if (result.job?.is_callback) {
+        return { booked: true, slot: validated.slot, noCharge: true, message: "This is a follow-up on recent work, so there's no charge for the visit." };
+      }
       return { booked: true, slot: validated.slot };
     }
 

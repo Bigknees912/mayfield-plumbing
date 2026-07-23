@@ -241,6 +241,41 @@ async function applySmsConsent(supabase, companyId, customerId, smsConsent) {
   if (eventError) throw eventError;
 }
 
+// A customer calling back about the same job type within this many days
+// gets it waived rather than quoted again - see migration
+// 064_callback_no_double_charge. 30 days covers "the fix didn't hold" for
+// most trades without also waiving an unrelated new job that happens to be
+// the same job type months later.
+const CALLBACK_WINDOW_DAYS = 30;
+
+/**
+ * Looks for a recently completed job of the same type for this customer -
+ * if found, this new booking is a callback on that work, not a new charge.
+ * Never throws: a lookup failure here should just mean "treat as a normal
+ * new job," not break a live booking.
+ */
+async function findRecentCallbackSource(supabase, companyId, customerId, jobTypeId) {
+  if (!customerId || !jobTypeId) return null;
+  try {
+    const since = new Date(Date.now() - CALLBACK_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("jobs")
+      .select("id, assigned_tech_id")
+      .eq("company_id", companyId)
+      .eq("customer_id", customerId)
+      .eq("job_type_id", jobTypeId)
+      .eq("status", "done")
+      .gte("completed_at", since)
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data || null;
+  } catch (err) {
+    console.error("findRecentCallbackSource failed (non-fatal, treated as a new job):", err.message);
+    return null;
+  }
+}
+
 /**
  * Creates the real booking: finds/creates the customer, inserts the job,
  * and marks the call's outcome "booked". Returns { ok: false, reason } on
@@ -312,6 +347,7 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
   await applySmsConsent(supabase, companyId, customerId, smsConsent);
 
   const jobTypeRow = await getJobType(supabase, companyId, jobType);
+  const callbackSource = await findRecentCallbackSource(supabase, companyId, customerId, jobTypeRow?.id);
 
   // jobs_no_double_booking_idx (migration 048) is the real guard against
   // two concurrent calls booking the same slot - the SELECT check above
@@ -327,14 +363,23 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
         company_id: companyId,
         customer_id: customerId,
         job_type_id: jobTypeRow?.id || null,
-        description: jobTypeRow?.label || jobType,
+        description: callbackSource
+          ? `${jobTypeRow?.label || jobType} - callback, no charge (original job ${callbackSource.id.slice(0, 8)})`
+          : jobTypeRow?.label || jobType,
         address,
         urgency,
         status: "unassigned",
         scheduled_date: resolved?.date || null,
         scheduled_window: resolved?.window || slot,
-        price_low: call?.quote_low ?? null,
-        price_high: call?.quote_high ?? null,
+        // A callback on recent work of the same type is waived, not
+        // re-quoted - see findRecentCallbackSource. The owner can still
+        // override the price on the job later if they disagree it's really
+        // the same issue.
+        price_low: callbackSource ? 0 : call?.quote_low ?? null,
+        price_high: callbackSource ? 0 : call?.quote_high ?? null,
+        is_callback: Boolean(callbackSource),
+        original_job_id: callbackSource?.id || null,
+        callback_waived: Boolean(callbackSource),
         source: "phone_ai",
         call_id: call?.id || null,
       })
