@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, Plus, Copy, Phone, Wrench, Users2 } from 'lucide-react'
 import { LIGHT } from '../theme'
 import { ErrorState, LoadingState, EmptyState, Badge, StatCard, ConfirmDialog, money } from '../dashboard/ui'
+import { useEscapeToClose } from '../dashboard/useEscapeToClose'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
 import { listCompanies, getCompanyDetail, createCompany, setCompanyStatus, listPlansAdmin } from '../lib/admin'
 
@@ -54,11 +55,12 @@ export default function CompaniesPage() {
             const status = STATUS_META[c.status] || STATUS_META.active
             const sub = SUB_STATUS_META[c.subscription_status]
             return (
-              <div
+              <button
                 key={c.id}
+                type="button"
                 className="tap"
                 onClick={() => setSelectedId(c.id)}
-                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 8, padding: '12px 16px', fontSize: 13, alignItems: 'center', borderBottom: `1px solid ${LIGHT.border}` }}
+                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 8, padding: '12px 16px', fontSize: 13, alignItems: 'center', borderBottom: `1px solid ${LIGHT.border}`, textAlign: 'left', width: '100%' }}
               >
                 <div>
                   <div style={{ fontWeight: 600, color: LIGHT.ink }}>{c.name}</div>
@@ -69,7 +71,7 @@ export default function CompaniesPage() {
                 <div style={{ color: LIGHT.sub }}>{new Date(c.created_at).toLocaleDateString()}</div>
                 <div><Badge bg={status.bg} fg={status.fg}>{status.label}</Badge></div>
                 <div>{sub && <Badge bg={sub.bg} fg={sub.fg}>{sub.label}</Badge>}</div>
-              </div>
+              </button>
             )
           })}
         </div>
@@ -125,8 +127,8 @@ function AddCompanyModal({ onClose, onCreated }) {
           <TextInput id="field-contact-email-1" value={contactEmail} onChange={setContactEmail} placeholder="owner@example.com" type="email" />
           <FieldLabel htmlFor="field-trade-1">Trade</FieldLabel>
           <TextInput id="field-trade-1" value={trade} onChange={setTrade} placeholder="Plumbing" />
-          <FieldLabel>Initial plan</FieldLabel>
-          <select value={plan} onChange={(e) => setPlan(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
+          <FieldLabel htmlFor="field-initial-plan">Initial plan</FieldLabel>
+          <select id="field-initial-plan" value={plan} onChange={(e) => setPlan(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
             {plans.map((p) => <option key={p.key} value={p.key}>{p.name} — {p.monthly_price > 0 ? money(p.monthly_price) + '/mo' : 'Free'}</option>)}
           </select>
           <ErrorText>{error}</ErrorText>
@@ -261,6 +263,7 @@ function JoinCodeRow({ code }) {
 }
 
 function ModalShell({ title, onClose, children }) {
+  useEscapeToClose(onClose)
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 20 }} onClick={onClose}>
       <div style={{ background: LIGHT.card, borderRadius: 20, padding: 22, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>

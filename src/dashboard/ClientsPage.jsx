@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core'
 import { Plus, X, Phone, Mail, CalendarClock } from 'lucide-react'
+import { useEscapeToClose } from './useEscapeToClose'
 import { listContacts, updateContactStage, createContact, PIPELINE_STAGES } from '../lib/crm'
 import { listActiveContractsByCustomer, isOverdue, isDueSoon } from '../lib/contracts'
 import { smsConsentScript } from '../lib/smsConsent'
@@ -264,6 +265,7 @@ function ContactCard({ contact, contracts, onOpen }) {
 }
 
 function AddContactModal({ company, onClose, onCreated }) {
+  useEscapeToClose(onClose)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')

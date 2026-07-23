@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { LIGHT } from '../theme'
+import { useEscapeToClose } from './useEscapeToClose'
 
 export function money(n) {
   return (n || 0).toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 })
@@ -94,10 +95,11 @@ export function ErrorBanner({ message, onRetry, onDismiss }) {
 // confirm button red; pass false for a confirm that isn't itself alarming
 // (rare, but keeps one component instead of two near-duplicates).
 export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = true, busy, error, onConfirm, onCancel }) {
+  useEscapeToClose(busy ? null : onCancel)
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 80, padding: 20 }}>
+    <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 80, padding: 20 }}>
       <div style={{ background: LIGHT.card, borderRadius: 18, padding: 22, width: '100%', maxWidth: 380, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
-        <div style={{ fontSize: 15.5, fontWeight: 700, color: LIGHT.ink, marginBottom: 8 }}>{title}</div>
+        <div id="confirm-dialog-title" style={{ fontSize: 15.5, fontWeight: 700, color: LIGHT.ink, marginBottom: 8 }}>{title}</div>
         <div style={{ fontSize: 13, color: LIGHT.sub, lineHeight: 1.5, marginBottom: 16 }}>{message}</div>
         <ErrorBanner message={error} />
         <div style={{ display: 'flex', gap: 8 }}>

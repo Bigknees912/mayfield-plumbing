@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, X, Phone, MessageSquare, ArrowRight, Landmark, Clock } from 'lucide-react'
+import { useEscapeToClose } from './useEscapeToClose'
 import {
   listEstimates, createEstimate, updateEstimateStatus, convertEstimateToJob,
   isStale, callHref, textHref, financingApplies,
@@ -184,6 +185,7 @@ function EstimateCard({ estimate, company, onStatusChange, onConvert }) {
 }
 
 function NewEstimateModal({ onClose, onCreated }) {
+  useEscapeToClose(onClose)
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [jobTypeId, setJobTypeId] = useState('')
@@ -226,8 +228,8 @@ function NewEstimateModal({ onClose, onCreated }) {
         <FieldLabel htmlFor="field-customer-phone-optional-1">Customer phone (optional)</FieldLabel>
         <TextInput id="field-customer-phone-optional-1" value={customerPhone} onChange={setCustomerPhone} placeholder="(403) 555-0119" type="tel" />
 
-        <FieldLabel>Job type</FieldLabel>
-        <select value={jobTypeId} onChange={(e) => setJobTypeId(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
+        <FieldLabel htmlFor="field-estimate-job-type">Job type</FieldLabel>
+        <select id="field-estimate-job-type" value={jobTypeId} onChange={(e) => setJobTypeId(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
           <option value="">Select a service…</option>
           {jobTypes.map((jt) => <option key={jt.id} value={jt.id}>{jt.label}</option>)}
         </select>
@@ -251,6 +253,7 @@ function NewEstimateModal({ onClose, onCreated }) {
 }
 
 function ConvertToJobModal({ estimate, onClose, onConverted }) {
+  useEscapeToClose(onClose)
   const [customerName, setCustomerName] = useState(estimate.customers?.name || estimate.customer_name || '')
   const [customerPhone, setCustomerPhone] = useState(estimate.customers?.phone || estimate.customer_phone || '')
   const [address, setAddress] = useState(estimate.customers?.address || '')

@@ -49,28 +49,30 @@ export default function EmployeeJoinScreen({ onBack, onDone }) {
         <TextInput id="field-your-name-1" value={name} onChange={setName} placeholder="Dave Martinez" />
         <FieldLabel htmlFor="field-company-join-code-1">Company join code</FieldLabel>
         <TextInput id="field-company-join-code-1" value={code} onChange={setCode} placeholder="A1B2-C3D4" />
-        <FieldLabel>Your role</FieldLabel>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+        <div role="group" aria-label="Your role" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          <FieldLabel>Your role</FieldLabel>
           {ROLE_OPTIONS.map((opt) => {
             const Icon = opt.icon
             const selected = role === opt.value
             return (
-              <div
+              <button
                 key={opt.value}
+                type="button"
                 className="tap"
                 onClick={() => setRole(opt.value)}
+                aria-pressed={selected}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12,
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, textAlign: 'left',
                   background: selected ? LIGHT.accentSoft : LIGHT.bg,
                   border: `1.5px solid ${selected ? LIGHT.accent : LIGHT.border}`,
                 }}
               >
-                <Icon size={17} color={selected ? LIGHT.accent : LIGHT.sub} />
+                <Icon size={17} color={selected ? LIGHT.accent : LIGHT.sub} aria-hidden="true" />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: LIGHT.ink }}>{opt.label}</div>
                   <div style={{ fontSize: 11.5, color: LIGHT.sub }}>{opt.sub}</div>
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, X, Zap, Pencil, Trash2 } from 'lucide-react'
+import { useEscapeToClose } from './useEscapeToClose'
 import {
   listAutomations, createAutomation, updateAutomation, deleteAutomation, describeAutomation,
   TRIGGER_TYPES, JOB_STATUSES, ACTION_TYPES, SMS_VARIABLES,
@@ -133,6 +134,7 @@ function minutesToParts(minutes) {
 }
 
 function AutomationFormModal({ automation, onClose, onSaved }) {
+  useEscapeToClose(onClose)
   const isEdit = !!automation
   const initialDelay = minutesToParts(automation?.delay_minutes || 0)
 

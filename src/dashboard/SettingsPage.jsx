@@ -386,8 +386,9 @@ function GoalsSection({ company, onSaved }) {
         Shown as a progress bar on the Analytics tab. Pick one - revenue or job count, not both at once.
       </div>
 
-      <FieldLabel>Goal type</FieldLabel>
+      <FieldLabel htmlFor="field-goal-type">Goal type</FieldLabel>
       <select
+        id="field-goal-type"
         value={goalType}
         onChange={(e) => setGoalType(e.target.value)}
         style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}

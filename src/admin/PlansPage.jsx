@@ -230,8 +230,8 @@ function CompanyOverrideEditor() {
 
   return (
     <div style={{ background: LIGHT.card, borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-      <FieldLabel>Company</FieldLabel>
-      <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
+      <FieldLabel htmlFor="field-override-company">Company</FieldLabel>
+      <select id="field-override-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
         <option value="">Select a company…</option>
         {companies?.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.plan || 'no plan'})</option>)}
       </select>

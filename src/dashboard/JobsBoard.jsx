@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { CheckCircle2, DollarSign, Plus, X, Route, Copy, ExternalLink, AlertTriangle } from 'lucide-react'
+import { useEscapeToClose } from './useEscapeToClose'
 import { listJobs, listJobTypes, listTeamTechs, listTechLocationsById, assignJob, findOrCreateCustomer, createJob, distanceKm } from '../lib/jobs'
 import { createDepositCheckout } from '../lib/deposits'
 import { smsConsentScript } from '../lib/smsConsent'
@@ -210,6 +211,7 @@ export default function JobsBoard({ company, locationId }) {
 // copies/opens this and shares it with the customer themselves (read it
 // over the phone, text it manually, etc).
 function DepositLinkModal({ link, onClose }) {
+  useEscapeToClose(onClose)
   const [copied, setCopied] = useState(false)
 
   function copy() {
@@ -244,6 +246,7 @@ function DepositLinkModal({ link, onClose }) {
 }
 
 function AssignPicker({ job, techs, techLocations, parts, jobTypePartsMap, techStockMap, assigning, onAssign, onClose }) {
+  useEscapeToClose(assigning ? null : onClose)
   function distanceTo(tech) {
     const loc = techLocations[tech.id]
     return distanceKm(job.lat, job.lng, loc?.lat, loc?.lng)
@@ -293,6 +296,7 @@ function AssignPicker({ job, techs, techLocations, parts, jobTypePartsMap, techS
 }
 
 function NewJobModal({ jobTypes, company, onClose, onCreated }) {
+  useEscapeToClose(onClose)
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [address, setAddress] = useState('')
@@ -349,14 +353,14 @@ function NewJobModal({ jobTypes, company, onClose, onCreated }) {
         <FieldLabel htmlFor="field-job-address-1">Job address</FieldLabel>
         <TextInput id="field-job-address-1" value={address} onChange={setAddress} placeholder="412 17 Ave SE" />
 
-        <FieldLabel>Job type</FieldLabel>
-        <select value={jobTypeId} onChange={(e) => setJobTypeId(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
+        <FieldLabel htmlFor="field-new-job-type">Job type</FieldLabel>
+        <select id="field-new-job-type" value={jobTypeId} onChange={(e) => setJobTypeId(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
           {jobTypes.length === 0 && <option value="">No job types set up</option>}
           {jobTypes.map((jt) => <option key={jt.id} value={jt.id}>{jt.label}</option>)}
         </select>
 
-        <FieldLabel>Urgency</FieldLabel>
-        <select value={urgency} onChange={(e) => setUrgency(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
+        <FieldLabel htmlFor="field-new-job-urgency">Urgency</FieldLabel>
+        <select id="field-new-job-urgency" value={urgency} onChange={(e) => setUrgency(e.target.value)} style={{ width: '100%', background: '#F5F5F7', border: `1px solid ${LIGHT.border}`, borderRadius: 10, fontSize: 14, padding: '11px 13px', marginBottom: 14, color: LIGHT.ink }}>
           <option value="standard">Standard</option>
           <option value="sameday">Same-Day</option>
           <option value="emergency">Emergency</option>

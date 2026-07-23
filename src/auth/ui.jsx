@@ -37,13 +37,19 @@ export function BackRow({ onBack }) {
   )
 }
 
-export function FieldLabel({ children }) {
-  return <div style={{ fontSize: 11.5, fontWeight: 700, color: LIGHT.sub, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>{children}</div>
+// A real <label> when htmlFor is given (screen readers announce it as the
+// field's name, and clicking the text focuses the input) - falls back to a
+// plain <div> for the handful of callers that use it as a section caption
+// with no single associated input.
+export function FieldLabel({ children, htmlFor }) {
+  const style = { fontSize: 11.5, fontWeight: 700, color: LIGHT.sub, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6, display: 'block' }
+  return htmlFor ? <label htmlFor={htmlFor} style={style}>{children}</label> : <div style={style}>{children}</div>
 }
 
-export function TextInput({ value, onChange, placeholder, type = 'text', autoComplete }) {
+export function TextInput({ id, value, onChange, placeholder, type = 'text', autoComplete }) {
   return (
     <input
+      id={id}
       type={type}
       value={value}
       placeholder={placeholder}

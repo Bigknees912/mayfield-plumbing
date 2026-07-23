@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { X, Receipt, Image as ImageIcon, ShieldCheck, Plus, Trash2 } from 'lucide-react'
 import { listInvoicesForCustomer, listWarrantyNotesForCustomer, listPhotosForCustomer, addWarrantyNote, uploadJobPhoto, deleteJobPhoto } from '../lib/documents'
+import { useEscapeToClose } from './useEscapeToClose'
 import { listJobsForCustomer } from '../lib/jobs'
 import { LIGHT } from '../theme'
 import { LoadingState, ErrorState, ErrorBanner, EmptyState, money } from './ui'
@@ -23,6 +24,7 @@ const INVOICE_STATUS_STYLE = {
 // section inside it since photo thumbnails and three separate composers
 // need more room than that modal has to spare.
 export default function DocumentVaultModal({ contact, onClose }) {
+  useEscapeToClose(onClose)
   const [invoices, setInvoices] = useState([])
   const [photos, setPhotos] = useState([])
   const [warrantyNotes, setWarrantyNotes] = useState([])
@@ -194,8 +196,9 @@ function AddWarrantyNoteForm({ customerId, onAdded }) {
 
   return (
     <div style={{ background: LIGHT.bg, borderRadius: 12, padding: 10, marginBottom: 10 }}>
-      <FieldLabel>Warranty / workmanship note</FieldLabel>
+      <FieldLabel htmlFor="field-warranty-note">Warranty / workmanship note</FieldLabel>
       <textarea
+        id="field-warranty-note"
         value={body}
         onChange={(e) => setBody(e.target.value)}
         placeholder="e.g. 1yr parts + labor warranty on water heater install, expires Jul 2027"

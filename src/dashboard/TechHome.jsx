@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Clock, CheckCircle2, Clock3, Navigation, Play, MapPin, ChevronRight, X, Phone, Users, DollarSign, History, Image as ImageIcon, Plus, Trash2 } from 'lucide-react'
 import { listJobsForTechToday, advanceJobStatus, updateJobNotes, getLastVisit } from '../lib/jobs'
+import { useEscapeToClose } from './useEscapeToClose'
 import { listPhotosForJob, uploadJobPhoto, deleteJobPhoto } from '../lib/documents'
 import { getOpenTimeEntry, clockIn, clockOut } from '../lib/timeEntries'
 import { useLocationSharing } from '../lib/techLocation'
@@ -208,6 +209,7 @@ function DetailRow({ icon: Icon, label, value }) {
 }
 
 function JobDetailModal({ job, onClose, onSaveNotes }) {
+  useEscapeToClose(onClose)
   const [notes, setNotes] = useState(job.notes || '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -273,8 +275,9 @@ function JobDetailModal({ job, onClose, onSaveNotes }) {
           </a>
         </div>
 
-        <FieldLabel>Job Notes</FieldLabel>
+        <FieldLabel htmlFor="field-job-notes">Job Notes</FieldLabel>
         <textarea
+          id="field-job-notes"
           value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder="Anything worth remembering about this job or customer, gate code, dog in the yard, parts needed next time..."
           rows={4}
@@ -394,6 +397,7 @@ function JobPhotosSection({ job }) {
 }
 
 function CompleteJobModal({ job, onClose, onComplete }) {
+  useEscapeToClose(onClose)
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
