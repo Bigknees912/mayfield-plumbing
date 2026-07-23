@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus, Download, CreditCard } from 'lucide-react'
 import { updateCompanySettings } from '../lib/settings'
-import { getMyPlan } from '../lib/plans'
+import { getMyPlan, getMySubscriptionDetail, cancelMySubscription } from '../lib/plans'
 import { listLocations, createLocation, deleteLocation } from '../lib/locations'
+import { downloadCompanyExport } from '../lib/dataExport'
 import { LIGHT } from '../theme'
-import { SectionLabel, EmptyState } from './ui'
+import { SectionLabel, EmptyState, ConfirmDialog } from './ui'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, Checkbox, usePendingAction } from '../auth/ui'
 
 // Owner-only settings. Starts with just Pricing & Revenue - the numbers
@@ -18,7 +19,136 @@ export default function SettingsPage({ company, onSaved }) {
       <PricingRevenueSection company={company} onSaved={onSaved} />
       <GoalsSection company={company} onSaved={onSaved} />
       <LocationsSection />
+      <BillingSection />
+      <DataExportSection company={company} />
     </>
+  )
+}
+
+// The follow-through on "no lock-in, cancel anytime" - the plan and price
+// alone (getMyPlan) don't answer "what happens if I cancel", so this shows
+// the real Stripe-backed state and puts the cancel action behind a
+// confirmation that says exactly that.
+function BillingSection() {
+  const [sub, setSub] = useState(undefined)
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  function load() {
+    getMySubscriptionDetail().then(setSub).catch((err) => setError(err.message || String(err)))
+  }
+  useEffect(load, [])
+
+  async function confirmCancel() {
+    setBusy(true)
+    setError('')
+    try {
+      await cancelMySubscription()
+      setConfirming(false)
+      load()
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (sub === undefined) return null
+  // Free/starter company with no Stripe subscription yet - nothing to bill
+  // or cancel, so there's nothing useful to show here.
+  if (!sub || !sub.stripe_subscription_id) return null
+
+  const periodEndLabel = sub.current_period_end
+    ? new Date(sub.current_period_end).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
+    : null
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <SectionLabel>Billing</SectionLabel>
+      <div style={{ background: LIGHT.card, borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: sub.cancel_at_period_end ? 12 : 14 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: LIGHT.accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <CreditCard size={16} color={LIGHT.accent} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: LIGHT.ink, textTransform: 'capitalize' }}>{sub.plan} plan</div>
+            <div style={{ fontSize: 11.5, color: LIGHT.sub }}>
+              {sub.cancel_at_period_end
+                ? periodEndLabel ? `Cancels on ${periodEndLabel} - you keep full access until then.` : 'Scheduled to cancel at the end of this billing period.'
+                : periodEndLabel ? `Renews ${periodEndLabel}.` : 'Active.'}
+            </div>
+          </div>
+        </div>
+        <ErrorText>{error}</ErrorText>
+        {!sub.cancel_at_period_end && (
+          <button
+            className="tap"
+            onClick={() => setConfirming(true)}
+            style={{ fontSize: 12, fontWeight: 600, color: LIGHT.alert }}
+          >
+            Cancel Subscription
+          </button>
+        )}
+      </div>
+      {confirming && (
+        <ConfirmDialog
+          title="Cancel your subscription?"
+          message={`You'll keep full access through the end of your current billing period${periodEndLabel ? ` (${periodEndLabel})` : ''}. After that, your dashboard access will be paused and no further charges will be made. You can export your data any time before or after - see below.`}
+          confirmLabel="Cancel Subscription"
+          busy={busy}
+          error={error}
+          onConfirm={confirmCancel}
+          onCancel={() => { if (!busy) { setConfirming(false); setError('') } }}
+        />
+      )}
+    </div>
+  )
+}
+
+// The literal follow-through on the pricing page's "no lock-in" line - a
+// real downloadable file, not a "contact support" promise. Pure client-side
+// read + Blob download (see lib/dataExport.js), so there's no server-side
+// export job to track, expire, or clean up.
+function DataExportSection({ company }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
+
+  async function handleExport() {
+    setBusy(true)
+    setError('')
+    try {
+      await downloadCompanyExport(company)
+      setDone(true)
+      setTimeout(() => setDone(false), 2500)
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <SectionLabel>Your Data</SectionLabel>
+      <div style={{ background: LIGHT.card, borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+        <div style={{ fontSize: 13, color: LIGHT.ink, fontWeight: 700, marginBottom: 4 }}>Export Your Data</div>
+        <div style={{ fontSize: 12, color: LIGHT.sub, lineHeight: 1.5, marginBottom: 14 }}>
+          Downloads every job and client record for your company as one file. It's yours - no
+          lock-in, no waiting on a support request.
+        </div>
+        <ErrorText>{error}</ErrorText>
+        <button
+          className="tap"
+          onClick={handleExport}
+          disabled={busy}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 600, color: LIGHT.ink, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, padding: '9px 14px' }}
+        >
+          <Download size={14} /> {busy ? 'Preparing…' : done ? 'Downloaded' : 'Export Your Data'}
+        </button>
+      </div>
+    </div>
   )
 }
 

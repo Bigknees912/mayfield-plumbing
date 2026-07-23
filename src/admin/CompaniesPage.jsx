@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Plus, Copy, Phone, Wrench, Users2 } from 'lucide-react'
 import { LIGHT } from '../theme'
-import { ErrorState, LoadingState, EmptyState, Badge, StatCard, money } from '../dashboard/ui'
+import { ErrorState, LoadingState, EmptyState, Badge, StatCard, ConfirmDialog, money } from '../dashboard/ui'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, usePendingAction } from '../auth/ui'
 import { listCompanies, getCompanyDetail, createCompany, setCompanyStatus, listPlansAdmin } from '../lib/admin'
 
@@ -141,6 +141,11 @@ function CompanyDetailModal({ companyId, onClose, onChanged }) {
   const [detail, setDetail] = useState(undefined)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  // Set to the target status while its confirm dialog is open; null means
+  // no dialog. Only 'suspended'/'cancelled' ever route through here -
+  // switching to trial/active restores access, so it isn't destructive.
+  const [confirmingStatus, setConfirmingStatus] = useState(null)
+  const [confirmError, setConfirmError] = useState('')
 
   function load() {
     setError('')
@@ -149,14 +154,25 @@ function CompanyDetailModal({ companyId, onClose, onChanged }) {
   }
   useEffect(load, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  function requestStatusChange(status) {
+    if (status === 'suspended' || status === 'cancelled') {
+      setConfirmError('')
+      setConfirmingStatus(status)
+    } else {
+      changeStatus(status)
+    }
+  }
+
   async function changeStatus(status) {
     setBusy(true)
     try {
       await setCompanyStatus(companyId, status)
       load()
       onChanged()
+      setConfirmingStatus(null)
     } catch (err) {
       setError(err.message || String(err))
+      setConfirmError(err.message || String(err))
     } finally {
       setBusy(false)
     }
@@ -190,7 +206,7 @@ function CompanyDetailModal({ companyId, onClose, onChanged }) {
                 key={s}
                 className="tap"
                 disabled={busy || detail.company.status === s}
-                onClick={() => changeStatus(s)}
+                onClick={() => requestStatusChange(s)}
                 style={{
                   padding: '8px 13px', borderRadius: 20, fontSize: 12.5, fontWeight: 600,
                   border: `1.5px solid ${detail.company.status === s ? LIGHT.accent : LIGHT.border}`,
@@ -208,6 +224,21 @@ function CompanyDetailModal({ companyId, onClose, onChanged }) {
             Every change here is written to the audit log.
           </div>
         </div>
+      )}
+      {confirmingStatus && (
+        <ConfirmDialog
+          title={confirmingStatus === 'suspended' ? `Suspend ${detail?.company?.name}?` : `Cancel ${detail?.company?.name}'s account?`}
+          message={
+            confirmingStatus === 'suspended'
+              ? "Every user at this company loses dashboard access immediately - their receptionist and dispatch board stop working. No data is deleted, and you can restore access by switching them back to Active."
+              : "Every user at this company loses dashboard access immediately, same as suspending. Cancelled is meant to be the end state for a company that's actually leaving, not a temporary hold - use Suspend for that."
+          }
+          confirmLabel={confirmingStatus === 'suspended' ? 'Suspend' : 'Cancel Account'}
+          busy={busy}
+          error={confirmError}
+          onConfirm={() => changeStatus(confirmingStatus)}
+          onCancel={() => { if (!busy) { setConfirmingStatus(null); setConfirmError('') } }}
+        />
       )}
     </ModalShell>
   )

@@ -106,6 +106,15 @@ export async function listTeamTechs({ locationId } = {}) {
   return data
 }
 
+// Wraps owner_remove_team_member (migration 062). Revokes the profile's
+// access to this company (nulls company_id/location_id server-side) and
+// unassigns their open jobs - see the migration for why this doesn't
+// delete the underlying auth account.
+export async function removeTeamMember(profileId) {
+  const { error } = await supabase.rpc('owner_remove_team_member', { p_profile_id: profileId })
+  if (error) throw error
+}
+
 // Keyed by tech_id. lat/lng live on tech_locations, not profiles - there's
 // no GPS pipeline populating this yet, so it'll be an empty map in
 // practice until a mobile app starts upserting positions.

@@ -85,3 +85,40 @@ export function ErrorBanner({ message, onRetry, onDismiss }) {
     </div>
   )
 }
+
+// Shared confirmation gate for anything destructive or hard to reverse:
+// removing a team member, suspending/cancelling a company, cancelling a
+// subscription. Deliberately NOT dismissible by clicking the backdrop -
+// only the two buttons resolve it - so a stray click near the dialog can
+// never register as either choice. `danger` (default true) colors the
+// confirm button red; pass false for a confirm that isn't itself alarming
+// (rare, but keeps one component instead of two near-duplicates).
+export function ConfirmDialog({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = true, busy, error, onConfirm, onCancel }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 80, padding: 20 }}>
+      <div style={{ background: LIGHT.card, borderRadius: 18, padding: 22, width: '100%', maxWidth: 380, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+        <div style={{ fontSize: 15.5, fontWeight: 700, color: LIGHT.ink, marginBottom: 8 }}>{title}</div>
+        <div style={{ fontSize: 13, color: LIGHT.sub, lineHeight: 1.5, marginBottom: 16 }}>{message}</div>
+        <ErrorBanner message={error} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="tap"
+            onClick={onCancel}
+            disabled={busy}
+            style={{ flex: 1, fontSize: 13, fontWeight: 600, color: LIGHT.ink, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, padding: '10px 0' }}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            className="tap"
+            onClick={onConfirm}
+            disabled={busy}
+            style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#fff', background: danger ? LIGHT.alert : LIGHT.ink, borderRadius: 10, padding: '10px 0' }}
+          >
+            {busy ? 'Working…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

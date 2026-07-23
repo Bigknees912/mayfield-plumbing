@@ -56,6 +56,30 @@ export async function getMyPlan() {
   return data?.plan || null
 }
 
+// Full subscription row for the Billing section of Settings - plan alone
+// (getMyPlan, above) isn't enough to show "your plan ends on <date>".
+export async function getMySubscriptionDetail() {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('plan, status, cancel_at_period_end, current_period_end, stripe_subscription_id')
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// Calls the cancel-subscription edge function (Stripe cancel_at_period_end,
+// not an immediate cancel - see that function's own comment for why).
+// Only meaningful for a paid plan with a real Stripe subscription; the
+// function itself rejects a free/starter company with a clear message.
+export async function cancelMySubscription() {
+  const { data, error } = await supabase.functions.invoke('cancel-subscription', { body: {} })
+  if (error) {
+    const detail = await error.context?.json?.().catch(() => null)
+    throw new Error(detail?.error || error.message)
+  }
+  return data
+}
+
 // Calls create-subscription-checkout and returns the Stripe-hosted
 // Checkout URL to redirect to. Only valid for a plan that already has a
 // subscriptions row (i.e. after createCompanyAndOwner has run) - the edge

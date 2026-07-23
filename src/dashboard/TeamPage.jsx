@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Package, Trophy } from 'lucide-react'
+import { Package, Trophy, UserMinus } from 'lucide-react'
 import { LIGHT } from '../theme'
-import { SectionLabel, ErrorState, LoadingState, EmptyState, initialsOf, money } from './ui'
-import { listTeamTechs, listOfficeAdmins } from '../lib/jobs'
+import { SectionLabel, ErrorState, LoadingState, EmptyState, ConfirmDialog, initialsOf, money } from './ui'
+import { listTeamTechs, listOfficeAdmins, removeTeamMember } from '../lib/jobs'
 import { listParts, listTechPartStockMap, setTechPartStock } from '../lib/inventory'
 import { listTechLeaderboardForMonth, formatDuration } from '../lib/analytics'
 import { assignProfileLocation } from '../lib/locations'
@@ -22,6 +22,9 @@ export default function TeamPage({ locations = [] }) {
   const [leaderboard, setLeaderboard] = useState([])
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState(null)
+  const [removing, setRemoving] = useState(null) // { id, name } while the confirm dialog is open
+  const [removeBusy, setRemoveBusy] = useState(false)
+  const [removeError, setRemoveError] = useState('')
 
   function load() {
     setError('')
@@ -63,6 +66,20 @@ export default function TeamPage({ locations = [] }) {
         {locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
       </select>
     )
+  }
+
+  async function confirmRemove() {
+    setRemoveBusy(true)
+    setRemoveError('')
+    try {
+      await removeTeamMember(removing.id)
+      setRemoving(null)
+      load()
+    } catch (err) {
+      setRemoveError(err.message || String(err))
+    } finally {
+      setRemoveBusy(false)
+    }
   }
 
   // Optimistic toggle, reverted on failure - same pattern as ClientsPage's
@@ -114,6 +131,14 @@ export default function TeamPage({ locations = [] }) {
                     </span>
                   )}
                   <LocationPicker member={t} setList={setTechs} />
+                  <button
+                    className="tap"
+                    onClick={(e) => { e.stopPropagation(); setRemoveError(''); setRemoving({ id: t.id, name: t.name }) }}
+                    title="Remove from team"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, color: LIGHT.alert, flexShrink: 0 }}
+                  >
+                    <UserMinus size={15} />
+                  </button>
                 </div>
 
                 {isOpen && (
@@ -162,10 +187,30 @@ export default function TeamPage({ locations = [] }) {
                   <div style={{ fontSize: 11.5, color: LIGHT.sub }}>{oa.phone || oa.email || 'Office Admin'}</div>
                 </div>
                 <LocationPicker member={oa} setList={setOfficeAdmins} />
+                <button
+                  className="tap"
+                  onClick={() => { setRemoveError(''); setRemoving({ id: oa.id, name: oa.name }) }}
+                  title="Remove from team"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, color: LIGHT.alert, flexShrink: 0 }}
+                >
+                  <UserMinus size={15} />
+                </button>
               </div>
             ))}
           </div>
         </>
+      )}
+
+      {removing && (
+        <ConfirmDialog
+          title={`Remove ${removing.name}?`}
+          message={`They'll immediately lose access to this company's dashboard and data. Any jobs currently assigned to them become unassigned. This doesn't delete their login - they can be invited back later with a new join code if needed.`}
+          confirmLabel="Remove"
+          busy={removeBusy}
+          error={removeError}
+          onConfirm={confirmRemove}
+          onCancel={() => { if (!removeBusy) { setRemoving(null); setRemoveError('') } }}
+        />
       )}
     </div>
   )
