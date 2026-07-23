@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.anthropic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
+<title>Try the Demo — Sable</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
   :root {
@@ -58,11 +64,16 @@
   .total-sub { font-size: 11.5px; color: var(--slate); margin-bottom: 4px; }
   .empty-ticket { text-align: center; color: var(--slate); font-size: 13px; padding: 50px 0; line-height: 1.6; }
   .footer-note { max-width: 980px; margin: 20px auto 0 auto; font-size: 11.5px; color: #4E5A67; font-family: 'IBM Plex Mono', monospace; }
+  .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--slate); font-size: 12.5px; text-decoration: none; margin-bottom: 18px; }
+  .back-link:hover { color: var(--paper); }
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <div class="grid">
     <div>
+      <a class="back-link" href="home.html">&larr; Back to Sable</a>
       <div class="eyebrow">SABLE PLUMBING &amp; DRAIN — VOICE CALL SIMULATOR</div>
       <h1>Talk to Alex, For Real</h1>
       <div class="phone">
@@ -381,3 +392,5 @@ Only include non-null values you're confident about. Never overwrite a known fie
     speak(greeting);
   }
 </script>
+</body>
+</html>
