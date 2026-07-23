@@ -364,4 +364,29 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
   return { ok: true, job };
 }
 
-module.exports = { recordQuote, createBooking, applySmsConsent, findOrCreateLeadForCall, escalateToHuman };
+/**
+ * Logs a mid-call technical failure (a tool threw) as a lead needing a
+ * human callback, the same way escalateToHuman does for "outside Alex's
+ * scope" cases - except this is "Alex tried and the system broke," so the
+ * caller isn't left with a booking that silently never happened. Never
+ * throws - this is itself a failure-handling path; it must not compound
+ * the outage it's reporting on.
+ */
+async function logSystemErrorForFollowup({ companyId, vapiCallId, customerPhone, toolName, supabaseClient }) {
+  const supabase = supabaseClient || getSupabase();
+  try {
+    const customerId = await findOrCreateLeadForCall({ companyId, vapiCallId, customerPhone, supabaseClient: supabase });
+    if (customerId) {
+      await supabase.from("customer_interactions").insert({
+        company_id: companyId,
+        customer_id: customerId,
+        type: "call",
+        body: `Alex hit a technical error mid-call (${toolName}) and couldn't finish. Needs a callback to complete their booking/quote.`,
+      });
+    }
+  } catch (err) {
+    console.error("logSystemErrorForFollowup failed (non-fatal):", err.message);
+  }
+}
+
+module.exports = { recordQuote, createBooking, applySmsConsent, findOrCreateLeadForCall, escalateToHuman, logSystemErrorForFollowup };

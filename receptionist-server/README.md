@@ -144,6 +144,30 @@ running your actual pricing and scheduling logic.
 - **SMS confirmation**: Vapi has a built-in `sms` tool that can text the
   customer a booking confirmation right after the call, using the Twilio
   account you already connected. Worth adding once the core flow works.
+- **Outage safety net (do this before going live with a real client)**:
+  the whole pitch is "you never miss a call" - two layers protect that:
+  1. *Our own server hiccups*: `lib/outageAlert.js` counts tool-call
+     failures per company, and once 3 happen inside 5 minutes, POSTs to
+     `OUTAGE_ALERT_URL` (the deployed `receptionist-outage-alert` edge
+     function) with the shared secret `OUTAGE_ALERT_WEBHOOK_SECRET` set on
+     both sides. That function texts the company's owner directly (looked
+     up from `profiles` where `role = 'owner'`) and logs the incident to
+     `receptionist_outage_alerts`. Deploy the function, set both env vars
+     on the server, and set `OUTAGE_ALERT_WEBHOOK_SECRET`/`TWILIO_*` on the
+     function itself, or this only logs to the console (still visible in
+     Sentry, just not proactive). Individual failed tool calls also no
+     longer leak a raw `Error: ...` string to the model - the caller hears
+     "someone will call you back," and a `customer_interactions` row gets
+     created automatically so the office actually follows up.
+  2. *Vapi or the whole webhook is unreachable, not just one tool call*:
+     that's outside anything our own code can catch, since Vapi never
+     reaches us at all. In the Vapi dashboard, on the phone number itself
+     (not the assistant), set a **fallback destination** - a real human
+     line (the office's cell, an answering service) that Vapi forwards to
+     if the assistant can't be reached. This is the actual backstop for a
+     total platform outage; there is no code path for it, it's a dashboard
+     setting, and it's the single highest-value 5 minutes you can spend
+     before handing this to a paying client.
 - **Per-client setup**: `lib/pricing.js` and `lib/assistantConfig.js` both
   read this company's own `companies`/`job_types` rows - to resell this to
   a second company of any trade, copy the project, point

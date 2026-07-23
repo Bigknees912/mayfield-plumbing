@@ -3,10 +3,11 @@ const Sentry = require("./instrument"); // must load before anything else - see 
 const express = require("express");
 const { calcQuote } = require("./lib/pricing");
 const { nextAvailableSlots } = require("./lib/scheduling");
-const { recordQuote, createBooking, findOrCreateLeadForCall, escalateToHuman } = require("./lib/booking");
+const { recordQuote, createBooking, findOrCreateLeadForCall, escalateToHuman, logSystemErrorForFollowup } = require("./lib/booking");
 const { getCompanyId, getSupabase, validateEnv } = require("./lib/supabase");
 const { validateBookingArgs, validateQuoteArgs } = require("./lib/validate");
 const { isRateLimited } = require("./lib/rateLimiter");
+const { recordFailureAndMaybeAlert } = require("./lib/outageAlert");
 
 // Fail loudly at boot if Supabase env vars are missing, instead of only
 // discovering it on the first real phone call.
@@ -108,7 +109,25 @@ app.post("/vapi/webhook", checkAuth, async (req, res) => {
         // Alex says on the call - nobody finds out until the customer
         // complains their appointment never actually got scheduled.
         Sentry.captureException(err, { extra: { toolName: toolCall.name, toolArgs: toolCall.arguments, vapiCallId: callContext.vapiCallId } });
-        return { toolCallId: toolCall.id, result: `Error: ${err.message}` };
+
+        // Three failure-mode protections against "an outage silently means
+        // missed calls again," which is the whole product promise:
+        //   1. Tell the caller something sane instead of a raw error - a
+        //      literal "Error: ..." string handed to the model can produce
+        //      anything, including reading the error out loud.
+        //   2. Log this as a lead needing a human callback, same as any
+        //      other escalation, so the office can actually follow up.
+        //   3. Count it toward the outage circuit breaker - if this keeps
+        //      happening, the owner gets texted directly within minutes.
+        const companyId = getCompanyId();
+        logSystemErrorForFollowup({ companyId, vapiCallId: callContext.vapiCallId, customerPhone: callContext.customerPhone, toolName: toolCall.name })
+          .catch(() => {}); // already logs its own failures internally
+        recordFailureAndMaybeAlert(companyId, err, { toolName: toolCall.name, vapiCallId: callContext.vapiCallId });
+
+        return {
+          toolCallId: toolCall.id,
+          result: "Error: something went wrong on our end just now, not the caller's fault. Apologize briefly, let them know a real person will call them back shortly to finish this, and don't retry this action again this call.",
+        };
       }
     })
   );
