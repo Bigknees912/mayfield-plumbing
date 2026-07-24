@@ -1942,32 +1942,39 @@ a fixed `62px` width) instead of squeezing every icon proportionally.
 
 ## Not built yet (flagged in the schema, not implemented)
 
-- Invoice generation - the `invoices` table and the Document Vault's
-  read side both exist (see "Document Vault & last-visit summary" above),
-  but nothing in the app writes an invoice row yet. The vault will show
-  real invoices the moment something does; today that section is just
-  empty.
-- Google review ingestion - the notification center's `review_left` type
-  exists in the schema for forward compatibility, but there's no Google
-  Business Profile API/webhook integration to detect an actual review
-  landing, so nothing ever populates it. The review-request SMS still
-  only sends a link, one-way.
-- Charted analytics (revenue-over-time, jobs-by-type) - `app-demo.jsx`'s
-  `recharts`-based Insights tab wasn't ported; `recharts` isn't a real
-  dependency yet and this dev environment can't install/verify a new
-  package. `AnalyticsPage.jsx` today is the goal bar + plain stat cards
-  only.
-- Stripe billing webhooks (subscriptions table exists, nothing populates
-  `stripe_customer_id`/`stripe_subscription_id` yet beyond the `starter`
-  default).
-- Google Calendar / QuickBooks / Slack OAuth flows (integrations table
-  exists, `connected` stays `false` until built).
-- Any frontend wiring — `app-demo.jsx` still runs on its in-memory mock
-  state; it hasn't been pointed at Supabase yet.
-- Deeper per-feature gating tied to `plans.features` — the admin panel
-  edits the feature list a plan displays, but nothing in the dashboard
-  currently checks "does this company's plan include X" before showing a
-  feature. `plans.features` is display-only today.
+> **Kept current as of the full system audit (migrations 065–070).** Items
+> that USED to be here and are now built — Stripe billing webhooks +
+> self-serve checkout (`stripe-webhook`, `create-subscription-checkout`,
+> `change-subscription-plan`), self-serve cancellation, team-member removal
+> (`owner_remove_team_member`, TeamPage), the no-login customer portal
+> (`portal.html` + `job-status`), the outage voicemail fallback, and
+> warranty-callback tracking — have been removed from this list. The app is
+> wired to Supabase (the old `app-demo.jsx` in-memory note is gone).
+
+- **Invoice generation — still not built (audit I5).** The `invoices` table,
+  the Document Vault's read side, and the customer portal's invoice section
+  all exist, but nothing writes an invoice row yet, so all three render
+  empty for a completed job. Blocked on two decisions: the amount source (an
+  estimate range is not a final total) and the `invoices.status` check-
+  constraint values. Auto-generating a financial document from an estimate
+  was deliberately NOT shipped blind.
+- **Per-feature plan gating (audit I1).** Only the Fleet-tier multi-location
+  switcher is plan-gated (`plan === 'pro'`, enforced in AppShell/Settings).
+  Everything else the marketing tiers list (CRM, live map, dispatch) is
+  included in *all* tiers, so there is intentionally nothing else to gate;
+  `plans.features` remains display-only. If a future tier removes a feature,
+  add the entitlement check then.
+- Google review ingestion - `review_left` notification type exists but no
+  Google Business Profile API/webhook detects a real review landing.
+- Charted analytics - `recharts` still not a dependency; `AnalyticsPage.jsx`
+  is the goal bar + stat cards only.
+- Google Calendar / QuickBooks / Slack OAuth (integrations table exists,
+  `connected` stays `false`; the marketing Integrations page is aspirational).
+- Apple sign-in - only email/password + Google are implemented (audit I6).
+  No in-product surface claims Apple; add the provider before advertising it.
+- Setup fee collection - the $1,000–$2,000 onboarding fee is advertised but
+  not charged by `create-subscription-checkout` (only the recurring plan +
+  7-day trial are). Collected manually at hand-onboarding today.
 - A customer-facing "view your estimate" link/portal — the Estimates
   page's "Viewed" status is owner-set, not auto-detected from a real
   customer click, because that page doesn't exist. Building it (a public
