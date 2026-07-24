@@ -27,6 +27,7 @@ export default defineConfig({
         contact: resolve(__dirname, 'contact.html'),
         getStarted: resolve(__dirname, 'get-started.html'),
         login: resolve(__dirname, 'login.html'),
+        portal: resolve(__dirname, 'portal.html'),
         terms: resolve(__dirname, 'terms.html'),
         privacy: resolve(__dirname, 'privacy.html'),
         sableTerms: resolve(__dirname, 'sable-terms.html'),
