@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core'
-import { Plus, X, Phone, Mail, CalendarClock } from 'lucide-react'
+import { Plus, X, Phone, Mail, CalendarClock, Voicemail } from 'lucide-react'
 import { useEscapeToClose } from './useEscapeToClose'
 import { listContacts, updateContactStage, createContact, PIPELINE_STAGES } from '../lib/crm'
 import { listActiveContractsByCustomer, isOverdue, isDueSoon } from '../lib/contracts'
@@ -218,6 +218,11 @@ function ContactCardContent({ contact, contracts }) {
         </div>
         <div style={{ fontSize: 12.5, fontWeight: 600, color: LIGHT.ink, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contact.name}</div>
       </div>
+      {contact.capture_method === 'fallback_voicemail' && (
+        <div style={{ fontSize: 9.5, fontWeight: 700, color: LIGHT.alert, background: 'rgba(162,65,51,0.10)', borderRadius: 10, padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+          <Voicemail size={10} aria-hidden="true" /> Fallback voicemail
+        </div>
+      )}
       {contact.phone && (
         <div style={{ fontSize: 10.5, color: LIGHT.sub, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
           <Phone size={10} /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contact.phone}</span>
