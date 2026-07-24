@@ -11,6 +11,9 @@ const STATUS_META = {
   active: { label: 'Active', bg: LIGHT.successSoft, fg: LIGHT.success },
   suspended: { label: 'Suspended', bg: LIGHT.alertSoft, fg: LIGHT.alert },
   cancelled: { label: 'Cancelled', bg: LIGHT.border, fg: LIGHT.sub },
+  // Synthetic status: still active (paid through period end) but the owner
+  // chose to cancel. Distinct from a card-failure "Suspended".
+  cancelling: { label: 'Cancelling', bg: '#F6E9D8', fg: '#9a5f28' },
 }
 const SUB_STATUS_META = {
   incomplete: { label: 'Incomplete', bg: LIGHT.border, fg: LIGHT.sub },
@@ -52,7 +55,11 @@ export default function CompaniesPage() {
             <div>Company</div><div>Trade</div><div>Plan</div><div>Signed Up</div><div>Status</div><div>Billing</div>
           </div>
           {companies.map((c) => {
-            const status = STATUS_META[c.status] || STATUS_META.active
+            // A company that's chosen to leave shows as "Cancelling" until
+            // its period actually lapses (then the webhook flips it to
+            // suspended/cancelled) - never conflated with non-payment.
+            const effectiveStatus = c.cancel_at_period_end && c.status === 'active' ? 'cancelling' : c.status
+            const status = STATUS_META[effectiveStatus] || STATUS_META.active
             const sub = SUB_STATUS_META[c.subscription_status]
             return (
               <button

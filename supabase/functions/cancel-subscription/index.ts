@@ -43,6 +43,11 @@ Deno.serve(async (req) => {
     } = await supabase.auth.getUser();
     if (userError || !user) return json({ error: "unauthorized" }, 401);
 
+    // Optional "reason for leaving" - stored for the operator's records,
+    // never required to complete the cancellation.
+    const body = await req.json().catch(() => ({}));
+    const reason = typeof body?.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 500) : null;
+
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role, company_id")
@@ -75,6 +80,8 @@ Deno.serve(async (req) => {
       .update({
         cancel_at_period_end: true,
         current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+        cancellation_reason: reason,
+        cancellation_requested_at: new Date().toISOString(),
       })
       .eq("company_id", profile.company_id);
     if (updateError) throw updateError;

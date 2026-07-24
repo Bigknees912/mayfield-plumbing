@@ -5,7 +5,7 @@ import { getMyPlan, getMySubscriptionDetail, cancelMySubscription } from '../lib
 import { listLocations, createLocation, deleteLocation } from '../lib/locations'
 import { downloadCompanyExport } from '../lib/dataExport'
 import { LIGHT } from '../theme'
-import { SectionLabel, EmptyState, ConfirmDialog } from './ui'
+import { SectionLabel, EmptyState } from './ui'
 import { useEscapeToClose } from './useEscapeToClose'
 import { FieldLabel, TextInput, PrimaryButton, ErrorText, Checkbox, usePendingAction } from '../auth/ui'
 
@@ -65,11 +65,11 @@ function BillingSection() {
   }
   useEffect(load, [])
 
-  async function confirmCancel() {
+  async function confirmCancel(reason) {
     setBusy(true)
     setError('')
     try {
-      await cancelMySubscription()
+      await cancelMySubscription(reason)
       setConfirming(false)
       load()
     } catch (err) {
@@ -127,16 +127,60 @@ function BillingSection() {
       )}
 
       {confirming && (
-        <ConfirmDialog
-          title="Cancel your subscription?"
-          message={`You'll keep full access through the end of your current billing period${periodEndLabel ? ` (${periodEndLabel})` : ''}. After that, your dashboard access will be paused and no further charges will be made. You can export your data any time before or after - see below.`}
-          confirmLabel="Cancel Subscription"
+        <CancelDialog
+          periodEndLabel={periodEndLabel}
           busy={busy}
           error={error}
           onConfirm={confirmCancel}
           onCancel={() => { if (!busy) { setConfirming(false); setError('') } }}
         />
       )}
+    </div>
+  )
+}
+
+// Final cancel step: states plainly what happens, captures an OPTIONAL
+// reason (skippable - never a gate), and confirms immediately. Not
+// backdrop-dismissible while busy, Escape closes when idle.
+function CancelDialog({ periodEndLabel, busy, error, onConfirm, onCancel }) {
+  useEscapeToClose(busy ? null : onCancel)
+  const [reason, setReason] = useState('')
+  return (
+    <div role="alertdialog" aria-modal="true" aria-labelledby="cancel-title" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 80, padding: 20 }}>
+      <div style={{ background: LIGHT.card, borderRadius: 20, padding: 24, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+        <div id="cancel-title" style={{ fontSize: 17, fontWeight: 700, color: LIGHT.ink, marginBottom: 12 }}>Cancel your subscription?</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 18 }}>
+          {[
+            `You keep full access until the end of your current billing period${periodEndLabel ? ` (${periodEndLabel})` : ''}.`,
+            'After that your account is suspended, not deleted - no further charges are made.',
+            'Your data is retained so you can reactivate and pick up where you left off if you come back.',
+            'You can export everything any time, before or after - see Export Your Data below.',
+          ].map((line, i) => (
+            <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+              <CheckCircle2 size={15} color={LIGHT.success} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+              <span style={{ fontSize: 13, color: LIGHT.ink, lineHeight: 1.45 }}>{line}</span>
+            </div>
+          ))}
+        </div>
+        <FieldLabel htmlFor="cancel-reason">One quick thing (optional): why are you leaving?</FieldLabel>
+        <textarea
+          id="cancel-reason"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={2}
+          placeholder="Totally optional - helps us improve. You can skip this."
+          style={{ width: '100%', fontFamily: 'inherit', fontSize: 13.5, color: LIGHT.ink, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 10, padding: '10px 12px', resize: 'vertical', marginBottom: 6 }}
+        />
+        <ErrorText>{error}</ErrorText>
+        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <button type="button" className="tap" disabled={busy} onClick={onCancel} style={{ flex: 1, textAlign: 'center', background: LIGHT.ink, color: '#fff', borderRadius: 10, padding: '12px 0', fontSize: 14, fontWeight: 700 }}>
+            Keep my plan
+          </button>
+          <button type="button" className="tap" disabled={busy} onClick={() => onConfirm(reason.trim() || null)} style={{ flex: 1, textAlign: 'center', background: 'transparent', color: LIGHT.alert, border: `1.5px solid ${LIGHT.alert}`, borderRadius: 10, padding: '12px 0', fontSize: 14, fontWeight: 700 }}>
+            {busy ? 'Cancelling…' : 'Confirm cancellation'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

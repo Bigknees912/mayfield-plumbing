@@ -71,8 +71,8 @@ export async function getMySubscriptionDetail() {
 // not an immediate cancel - see that function's own comment for why).
 // Only meaningful for a paid plan with a real Stripe subscription; the
 // function itself rejects a free/starter company with a clear message.
-export async function cancelMySubscription() {
-  const { data, error } = await supabase.functions.invoke('cancel-subscription', { body: {} })
+export async function cancelMySubscription(reason) {
+  const { data, error } = await supabase.functions.invoke('cancel-subscription', { body: reason ? { reason } : {} })
   if (error) {
     const detail = await error.context?.json?.().catch(() => null)
     throw new Error(detail?.error || error.message)
