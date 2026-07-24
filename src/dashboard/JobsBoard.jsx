@@ -136,7 +136,7 @@ export default function JobsBoard({ company, locationId }) {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <div style={{ fontSize: 13.5, fontWeight: 600, color: LIGHT.ink }}>{j.description}</div>
-                            {j.is_callback && <Badge bg={LIGHT.accentSoft} fg={LIGHT.accent}>Callback · no charge</Badge>}
+                            {j.is_callback && <Badge bg={j.callback_needs_review ? 'rgba(162,65,51,0.12)' : LIGHT.accentSoft} fg={j.callback_needs_review ? LIGHT.alert : LIGHT.accent}>{j.callback_needs_review ? 'Warranty callback · review' : 'Callback · no charge'}</Badge>}
                           </div>
                           <div style={{ fontSize: 12, color: LIGHT.sub }}>{j.customers?.name || 'No customer'} · {j.address}</div>
                         </div>

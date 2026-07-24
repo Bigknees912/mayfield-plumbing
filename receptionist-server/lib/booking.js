@@ -241,34 +241,50 @@ async function applySmsConsent(supabase, companyId, customerId, smsConsent) {
   if (eventError) throw eventError;
 }
 
-// A customer calling back about the same job type within this many days
-// gets it waived rather than quoted again - see migration
-// 064_callback_no_double_charge. 30 days covers "the fix didn't hold" for
-// most trades without also waiving an unrelated new job that happens to be
-// the same job type months later.
-const CALLBACK_WINDOW_DAYS = 30;
+// Fallback window if a company hasn't set companies.callback_window_days
+// (migration 067). 30 days covers "the fix didn't hold" for most trades
+// without also flagging an unrelated new job of the same type months later.
+const DEFAULT_CALLBACK_WINDOW_DAYS = 30;
+
+async function getCallbackWindowDays(supabase, companyId) {
+  try {
+    const { data } = await supabase.from("companies").select("callback_window_days").eq("id", companyId).maybeSingle();
+    const n = data?.callback_window_days;
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_CALLBACK_WINDOW_DAYS;
+  } catch {
+    return DEFAULT_CALLBACK_WINDOW_DAYS;
+  }
+}
 
 /**
- * Looks for a recently completed job of the same type for this customer -
- * if found, this new booking is a callback on that work, not a new charge.
- * Never throws: a lookup failure here should just mean "treat as a normal
- * new job," not break a live booking.
+ * Looks for a recently completed job of the same type that this caller is
+ * likely calling back about - matched by the same customer (phone) OR the
+ * same service address, within the company's configured window. If found,
+ * this new booking is a possible warranty callback on that work, not a new
+ * charge. Never throws: a lookup failure here should just mean "treat as a
+ * normal new job," not break a live booking.
  */
-async function findRecentCallbackSource(supabase, companyId, customerId, jobTypeId) {
-  if (!customerId || !jobTypeId) return null;
+async function findRecentCallbackSource(supabase, companyId, { customerId, jobTypeId, address, windowDays }) {
+  if (!jobTypeId) return null;
+  if (!customerId && !address) return null;
   try {
-    const since = new Date(Date.now() - CALLBACK_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabase
+    const since = new Date(Date.now() - (windowDays || DEFAULT_CALLBACK_WINDOW_DAYS) * 24 * 60 * 60 * 1000).toISOString();
+    let query = supabase
       .from("jobs")
-      .select("id, assigned_tech_id")
+      .select("id, assigned_tech_id, customer_id, address")
       .eq("company_id", companyId)
-      .eq("customer_id", customerId)
       .eq("job_type_id", jobTypeId)
       .eq("status", "done")
       .gte("completed_at", since)
       .order("completed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    // Match on the same customer (phone-resolved) or the same address -
+    // covers a returning caller who calls from a different number but the
+    // work is at the same place.
+    if (customerId && address) query = query.or(`customer_id.eq.${customerId},address.eq.${address}`);
+    else if (customerId) query = query.eq("customer_id", customerId);
+    else query = query.eq("address", address);
+    const { data } = await query.maybeSingle();
     return data || null;
   } catch (err) {
     console.error("findRecentCallbackSource failed (non-fatal, treated as a new job):", err.message);
@@ -347,7 +363,13 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
   await applySmsConsent(supabase, companyId, customerId, smsConsent);
 
   const jobTypeRow = await getJobType(supabase, companyId, jobType);
-  const callbackSource = await findRecentCallbackSource(supabase, companyId, customerId, jobTypeRow?.id);
+  const callbackWindowDays = await getCallbackWindowDays(supabase, companyId);
+  const callbackSource = await findRecentCallbackSource(supabase, companyId, {
+    customerId,
+    jobTypeId: jobTypeRow?.id,
+    address,
+    windowDays: callbackWindowDays,
+  });
 
   // jobs_no_double_booking_idx (migration 048) is the real guard against
   // two concurrent calls booking the same slot - the SELECT check above
@@ -364,22 +386,23 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
         customer_id: customerId,
         job_type_id: jobTypeRow?.id || null,
         description: callbackSource
-          ? `${jobTypeRow?.label || jobType} - callback, no charge (original job ${callbackSource.id.slice(0, 8)})`
+          ? `${jobTypeRow?.label || jobType} - possible warranty callback, needs owner review (original job ${callbackSource.id.slice(0, 8)})`
           : jobTypeRow?.label || jobType,
         address,
         urgency,
         status: "unassigned",
         scheduled_date: resolved?.date || null,
         scheduled_window: resolved?.window || slot,
-        // A callback on recent work of the same type is waived, not
-        // re-quoted - see findRecentCallbackSource. The owner can still
-        // override the price on the job later if they disagree it's really
-        // the same issue.
+        // A possible warranty callback on recent work of the same type is
+        // NOT auto-billed - it's booked at $0 and flagged for the owner to
+        // make the charge decision (callback_needs_review), rather than
+        // silently becoming a normal paid job. See findRecentCallbackSource.
         price_low: callbackSource ? 0 : call?.quote_low ?? null,
         price_high: callbackSource ? 0 : call?.quote_high ?? null,
         is_callback: Boolean(callbackSource),
         original_job_id: callbackSource?.id || null,
         callback_waived: Boolean(callbackSource),
+        callback_needs_review: Boolean(callbackSource),
         source: "phone_ai",
         call_id: call?.id || null,
       })
@@ -403,6 +426,22 @@ async function createBooking({ companyId, vapiCallId, slot, jobType, address, cu
       await supabase.from("estimates").update({ status: "accepted", job_id: job.id, status_changed_at: new Date().toISOString() }).eq("call_id", call.id);
     } catch (err) {
       console.error("linking estimate to booked job failed (non-fatal):", err.message);
+    }
+  }
+
+  // A possible warranty callback is routed to the owner for a manual
+  // charge decision - drop a CRM note so it surfaces in the interaction
+  // feed alongside the "needs review" flag on the job/board. Non-fatal.
+  if (callbackSource && customerId) {
+    try {
+      await supabase.from("customer_interactions").insert({
+        company_id: companyId,
+        customer_id: customerId,
+        type: "call",
+        body: `Possible warranty callback: same job type as a job completed within the last ${callbackWindowDays} days (original job ${callbackSource.id.slice(0, 8)}). Booked at no charge and flagged for your review - decide whether to bill before the visit.`,
+      });
+    } catch (err) {
+      console.error("logging callback-review note failed (non-fatal):", err.message);
     }
   }
 

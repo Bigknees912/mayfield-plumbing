@@ -35,6 +35,16 @@ class FakeQueryBuilder {
     this.filters.push({ type: "in", col, val: vals });
     return this;
   }
+  // Supports the subset used in booking.js: "col.eq.val,col2.eq.val2"
+  // meaning (col = val) OR (col2 = val2).
+  or(expr) {
+    const clauses = String(expr).split(",").map((c) => {
+      const [col, op, ...rest] = c.split(".");
+      return { col, op, val: rest.join(".") };
+    });
+    this.filters.push({ type: "or", clauses });
+    return this;
+  }
   order(col, opts) {
     this._order = { col, ascending: opts?.ascending !== false };
     return this;
@@ -58,6 +68,7 @@ class FakeQueryBuilder {
 
   _matches(row) {
     return this.filters.every((f) => {
+      if (f.type === "or") return f.clauses.some((c) => c.op === "eq" && String(row[c.col]) === String(c.val));
       if (f.type === "eq") return row[f.col] === f.val;
       if (f.type === "neq") return row[f.col] !== f.val;
       if (f.type === "gte") return row[f.col] >= f.val;

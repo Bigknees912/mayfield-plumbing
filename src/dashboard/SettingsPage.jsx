@@ -328,6 +328,7 @@ function PricingRevenueSection({ company, onSaved }) {
   const [depositThreshold, setDepositThreshold] = useState(String(company?.deposit_threshold ?? ''))
   const [depositPct, setDepositPct] = useState(String(company?.deposit_pct ?? ''))
   const [commissionPct, setCommissionPct] = useState(String(company?.commission_pct ?? ''))
+  const [callbackWindowDays, setCallbackWindowDays] = useState(String(company?.callback_window_days ?? '30'))
 
   const [financingEnabled, setFinancingEnabled] = useState(!!company?.financing_enabled)
   const [financingThreshold, setFinancingThreshold] = useState(String(company?.financing_threshold ?? '1500'))
@@ -345,6 +346,7 @@ function PricingRevenueSection({ company, onSaved }) {
       deposit_threshold: num(depositThreshold),
       deposit_pct: num(depositPct),
       commission_pct: num(commissionPct),
+      callback_window_days: num(callbackWindowDays) ?? 30,
       financing_enabled: financingEnabled,
       financing_threshold: num(financingThreshold) ?? 1500,
       financing_partner_url: financingPartnerUrl.trim() || null,
@@ -400,6 +402,13 @@ function PricingRevenueSection({ company, onSaved }) {
           <FieldLabel htmlFor="field-tech-commission-1">Tech commission (%)</FieldLabel>
           <TextInput id="field-tech-commission-1" value={commissionPct} onChange={setCommissionPct} placeholder="15" />
         </div>
+        <div>
+          <FieldLabel htmlFor="field-callback-window-1">Warranty callback window (days)</FieldLabel>
+          <TextInput id="field-callback-window-1" value={callbackWindowDays} onChange={setCallbackWindowDays} placeholder="30" />
+        </div>
+      </div>
+      <div style={{ fontSize: 11.5, color: LIGHT.sub, marginTop: 8, lineHeight: 1.45 }}>
+        If a returning caller books the same job type within this many days of a completed job (matched by phone or address), Alex flags it as a possible warranty callback, books it at no charge, and routes it to you for a charge decision instead of auto-billing it.
       </div>
 
       <div style={{ height: 1, background: LIGHT.border, margin: '18px 0' }} />

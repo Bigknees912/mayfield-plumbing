@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Package, Trophy, UserMinus } from 'lucide-react'
 import { LIGHT } from '../theme'
 import { SectionLabel, ErrorState, LoadingState, EmptyState, ConfirmDialog, initialsOf, money } from './ui'
-import { listTeamTechs, listOfficeAdmins, removeTeamMember } from '../lib/jobs'
+import { listTeamTechs, listOfficeAdmins, removeTeamMember, listTechCallbackRates } from '../lib/jobs'
 import { listParts, listTechPartStockMap, setTechPartStock } from '../lib/inventory'
 import { listTechLeaderboardForMonth, formatDuration } from '../lib/analytics'
 import { assignProfileLocation } from '../lib/locations'
@@ -20,6 +20,7 @@ export default function TeamPage({ locations = [] }) {
   const [parts, setParts] = useState([])
   const [stockMap, setStockMap] = useState({})
   const [leaderboard, setLeaderboard] = useState([])
+  const [callbackRates, setCallbackRates] = useState({})
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [removing, setRemoving] = useState(null) // { id, name } while the confirm dialog is open
@@ -29,13 +30,14 @@ export default function TeamPage({ locations = [] }) {
   function load() {
     setError('')
     setTechs(undefined)
-    Promise.all([listTeamTechs(), listOfficeAdmins(), listParts(), listTechPartStockMap(), listTechLeaderboardForMonth()])
-      .then(([t, oa, p, stock, board]) => {
+    Promise.all([listTeamTechs(), listOfficeAdmins(), listParts(), listTechPartStockMap(), listTechLeaderboardForMonth(), listTechCallbackRates().catch(() => ({}))])
+      .then(([t, oa, p, stock, board, cbr]) => {
         setTechs(t)
         setOfficeAdmins(oa)
         setParts(p)
         setStockMap(stock)
         setLeaderboard(board)
+        setCallbackRates(cbr || {})
       })
       .catch((err) => setError(err.message || String(err)))
   }
@@ -157,6 +159,20 @@ export default function TeamPage({ locations = [] }) {
 
                 {isOpen && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px dashed ${LIGHT.border}` }}>
+                    {(() => {
+                      const cb = callbackRates[t.id] || { completed: 0, callbacks: 0 }
+                      const rate = cb.completed > 0 ? Math.round((cb.callbacks / cb.completed) * 100) : 0
+                      const high = rate >= 10
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, padding: '10px 12px', background: LIGHT.bg, borderRadius: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: LIGHT.sub }}>Callback rate</div>
+                            <div style={{ fontSize: 11.5, color: LIGHT.sub, marginTop: 2 }}>{cb.callbacks} callback{cb.callbacks === 1 ? '' : 's'} of {cb.completed} completed job{cb.completed === 1 ? '' : 's'}</div>
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: high ? LIGHT.alert : cb.completed === 0 ? LIGHT.sub : LIGHT.success }}>{cb.completed === 0 ? '—' : `${rate}%`}</div>
+                        </div>
+                      )
+                    })()}
                     {parts.length === 0 && (
                       <div style={{ fontSize: 12, color: LIGHT.sub }}>Add parts in the Services tab's Parts Catalog first.</div>
                     )}
