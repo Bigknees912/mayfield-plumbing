@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Trash2, Plus, Download, CreditCard, CheckCircle2 } from 'lucide-react'
 import { updateCompanySettings } from '../lib/settings'
-import { getMyPlan, getMySubscriptionDetail, cancelMySubscription } from '../lib/plans'
+import { getMyPlan, getMySubscriptionDetail, cancelMySubscription, listPlans, changeMySubscriptionPlan } from '../lib/plans'
 import { listLocations, createLocation, deleteLocation } from '../lib/locations'
 import { downloadCompanyExport } from '../lib/dataExport'
 import { LIGHT } from '../theme'
@@ -55,8 +55,10 @@ const DEFAULT_RETENTION_BENEFITS = RETENTION_BENEFITS.growth
 
 function BillingSection() {
   const [sub, setSub] = useState(undefined)
+  const [plans, setPlans] = useState([])
   const [retaining, setRetaining] = useState(false) // "wait, don't go" screen
   const [confirming, setConfirming] = useState(false)
+  const [changingTo, setChangingTo] = useState(null) // plan key mid-switch
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -64,6 +66,20 @@ function BillingSection() {
     getMySubscriptionDetail().then(setSub).catch((err) => setError(err.message || String(err)))
   }
   useEffect(load, [])
+  useEffect(() => { listPlans().then(setPlans).catch(() => {}) }, [])
+
+  async function changePlan(planKey) {
+    setChangingTo(planKey)
+    setError('')
+    try {
+      await changeMySubscriptionPlan(planKey)
+      load()
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setChangingTo(null)
+    }
+  }
 
   async function confirmCancel(reason) {
     setBusy(true)
@@ -106,6 +122,26 @@ function BillingSection() {
           </div>
         </div>
         <ErrorText>{error}</ErrorText>
+        {!sub.cancel_at_period_end && plans.filter((p) => p.key !== sub.plan).length > 0 && (
+          <div style={{ marginTop: 4, marginBottom: 12, paddingTop: 12, borderTop: `1px dashed ${LIGHT.border}` }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: LIGHT.sub, marginBottom: 8 }}>Change plan</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {plans.filter((p) => p.key !== sub.plan).map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  className="tap"
+                  disabled={!!changingTo}
+                  onClick={() => changePlan(p.key)}
+                  style={{ fontSize: 12.5, fontWeight: 600, color: LIGHT.ink, background: LIGHT.bg, border: `1px solid ${LIGHT.border}`, borderRadius: 999, padding: '7px 13px' }}
+                >
+                  {changingTo === p.key ? 'Switching…' : `Switch to ${p.label} · ${p.price}`}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: LIGHT.sub, marginTop: 8 }}>Changes take effect immediately; Stripe prorates the difference.</div>
+          </div>
+        )}
         {!sub.cancel_at_period_end && (
           <button
             type="button"
