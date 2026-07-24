@@ -23,9 +23,15 @@ function json(body: unknown, status = 200) {
 // dollar amount - set once in the Supabase dashboard after creating
 // recurring Prices in Stripe. See AUTH.md "Self-serve onboarding & billing".
 const PRICE_ENV_BY_PLAN: Record<string, string> = {
-  growth: "STRIPE_PRICE_GROWTH",
-  pro: "STRIPE_PRICE_PRO",
+  starter: "STRIPE_PRICE_STARTER", // "Solo" tier (migration 069) - now paid
+  growth: "STRIPE_PRICE_GROWTH",   // "Team"
+  pro: "STRIPE_PRICE_PRO",         // "Fleet"
 };
+
+// Advertised everywhere (pricing page, get-started, cancel copy): a 7-day
+// free trial, card required. This is where that promise is actually kept -
+// without it, Stripe bills the first month immediately.
+const TRIAL_DAYS = 7;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -33,7 +39,7 @@ Deno.serve(async (req) => {
   try {
     const { plan } = await req.json();
     const priceEnvVar = PRICE_ENV_BY_PLAN[plan];
-    if (!priceEnvVar) return json({ error: "plan must be 'growth' or 'pro' (starter is free, no checkout needed)" }, 400);
+    if (!priceEnvVar) return json({ error: "plan must be one of: starter (Solo), growth (Team), pro (Fleet)" }, 400);
 
     const priceId = Deno.env.get(priceEnvVar);
     if (!priceId) {
@@ -77,7 +83,13 @@ Deno.serve(async (req) => {
       // customer.subscription.updated/deleted, which don't carry the
       // session's own metadata) - see stripe-webhook/index.ts.
       metadata: { company_id: profile.company_id, plan },
-      subscription_data: { metadata: { company_id: profile.company_id, plan } },
+      subscription_data: {
+        metadata: { company_id: profile.company_id, plan },
+        // The 7-day free trial the whole product promises. Card is still
+        // collected now (Checkout requires it), but the first charge only
+        // lands on day 8.
+        trial_period_days: TRIAL_DAYS,
+      },
       success_url: `${origin}/?subscription=active`,
       cancel_url: `${origin}/?subscription=cancelled`,
     });

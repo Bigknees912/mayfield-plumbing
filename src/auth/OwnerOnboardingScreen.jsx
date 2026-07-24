@@ -20,8 +20,9 @@ export default function OwnerOnboardingScreen({ plan, onBack, onDone }) {
   function submit() {
     run(async () => {
       await createCompanyAndOwner({ businessName, ownerName, trade, teamSize, serviceArea, plan, googleReviewLink })
-      // Starter is free - no Stripe involved, straight into the dashboard.
-      // A paid plan needs a real Checkout session; if that step itself
+      // All tiers are paid (Solo/Team/Fleet, migration 069) and route
+      // through Stripe Checkout, which starts the 7-day free trial. If that
+      // step itself
       // fails (e.g. Stripe isn't configured yet), the workspace still
       // exists - land them in the dashboard anyway rather than stranding
       // them on this form, with a clear note about what didn't finish.
